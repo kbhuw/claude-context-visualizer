@@ -1,6 +1,7 @@
 'use client';
 
 import type { McpServer, Plugin, Skill, Hook } from '@/lib/types';
+import { Badge } from '@/components/ui/badge';
 
 interface OverviewTabProps {
   mcpServers: McpServer[];
@@ -11,29 +12,28 @@ interface OverviewTabProps {
 }
 
 const sourceColors: Record<string, string> = {
-  'Global Settings': 'bg-blue-50 text-blue-600',
-  'Client State': 'bg-amber-50 text-amber-600',
-  'Plugin': 'bg-purple-50 text-purple-600',
-  'MCP Config': 'bg-green-50 text-green-600',
-  'Skills Dir': 'bg-pink-50 text-pink-600',
+  'Global Settings': 'bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-100',
+  'Client State': 'bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-100',
+  'Plugin': 'bg-purple-50 text-purple-600 dark:bg-purple-950 dark:text-purple-100',
+  'MCP Config': 'bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-100',
+  'Skills Dir': 'bg-pink-50 text-pink-600 dark:bg-pink-950 dark:text-pink-100',
+  'Custom': 'bg-orange-50 text-orange-600 dark:bg-orange-950 dark:text-orange-100',
 };
 
 function getSourceBadgeClass(source: string): string {
   for (const [key, cls] of Object.entries(sourceColors)) {
     if (source.toLowerCase().includes(key.toLowerCase())) return cls;
   }
-  return 'bg-gray-50 text-gray-600';
+  return 'bg-gray-50 text-gray-600 dark:bg-gray-900 dark:text-gray-100';
 }
 
 interface CardSection {
   title: string;
   color: string;
   dotColor: string;
-  items: { name: string; scope: 'global' | 'local'; source: string; raw: Record<string, unknown> }[];
+  items: { name: string; scope: 'global' | 'local' | 'custom'; source: string; raw: Record<string, unknown> }[];
   type: string;
 }
-
-const MAX_ITEMS = 5;
 
 function OverviewCard({
   section,
@@ -44,11 +44,10 @@ function OverviewCard({
 }) {
   const globalItems = section.items.filter((i) => i.scope === 'global');
   const localItems = section.items.filter((i) => i.scope === 'local');
+  const customItems = section.items.filter((i) => i.scope === 'custom');
 
   const renderItems = (items: typeof section.items, label: string, labelColor: string) => {
     if (items.length === 0) return null;
-    const visible = items.slice(0, MAX_ITEMS);
-    const remaining = items.length - MAX_ITEMS;
 
     return (
       <div>
@@ -56,38 +55,36 @@ function OverviewCard({
           {label}
         </div>
         <div className="space-y-1">
-          {visible.map((item, i) => (
+          {items.map((item, i) => (
             <button
               key={`${item.name}-${i}`}
               onClick={() => onSelectItem(section.type, item.raw)}
-              className="w-full flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-md hover:bg-[#fafafa] transition-colors duration-150 text-left"
+              className="w-full flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-md hover:bg-accent transition-colors duration-150 text-left"
             >
-              <span className="text-[#1a1a1a] truncate">{item.name}</span>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${getSourceBadgeClass(item.source)}`}>
+              <span className="text-foreground truncate">{item.name}</span>
+              <Badge className={`flex-shrink-0 ${getSourceBadgeClass(item.source)}`}>
                 {item.source}
-              </span>
+              </Badge>
             </button>
           ))}
-          {remaining > 0 && (
-            <div className="text-xs text-[#999] pl-2">+{remaining} more...</div>
-          )}
         </div>
       </div>
     );
   };
 
   return (
-    <div className="bg-white border border-[#e5e5e5] rounded-lg p-4">
+    <div className="bg-card border border-border rounded-lg p-4">
       <div className="flex items-center gap-2 mb-3">
         <span className={`w-2 h-2 rounded-full ${section.dotColor}`} />
-        <h3 className="text-sm font-semibold text-[#1a1a1a]">{section.title}</h3>
-        <span className="text-xs text-[#999]">{section.items.length}</span>
+        <h3 className="text-sm font-semibold text-foreground">{section.title}</h3>
+        <span className="text-xs text-muted-foreground">{section.items.length}</span>
       </div>
-      <div className="space-y-3">
+      <div className="space-y-3 max-h-72 overflow-y-auto">
         {renderItems(globalItems, 'Global', 'text-blue-500')}
-        {renderItems(localItems, 'Local', 'text-green-500')}
+        {renderItems(localItems, 'App Level', 'text-green-500')}
+        {renderItems(customItems, 'Custom', 'text-orange-500')}
         {section.items.length === 0 && (
-          <p className="text-xs text-[#999] italic">None configured</p>
+          <p className="text-xs text-muted-foreground italic">None configured</p>
         )}
       </div>
     </div>

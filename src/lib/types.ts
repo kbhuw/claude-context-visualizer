@@ -7,7 +7,7 @@ export interface ConfigSource {
 
 export interface McpServer {
   name: string;
-  scope: 'global' | 'local';
+  scope: 'global' | 'local' | 'custom';
   source: string;
   type: string;
   url?: string;
@@ -16,7 +16,7 @@ export interface McpServer {
 
 export interface Plugin {
   name: string;
-  scope: 'global' | 'local';
+  scope: 'global' | 'local' | 'custom';
   source: string;
   version: string;
   installPath: string;
@@ -30,7 +30,7 @@ export interface Plugin {
 
 export interface Skill {
   name: string;
-  scope: 'global' | 'local';
+  scope: 'global' | 'local' | 'custom';
   source: string;
   description?: string;
   filePath: string;
@@ -38,10 +38,18 @@ export interface Skill {
 
 export interface Hook {
   name: string;
-  scope: 'global' | 'local';
+  scope: 'global' | 'local' | 'custom';
   source: string;
   type: string;
   command: string;
+}
+
+export interface Command {
+  name: string;
+  scope: 'global' | 'local';
+  source: string;
+  description?: string;
+  filePath: string;
 }
 
 export interface ProjectContext {
@@ -51,7 +59,16 @@ export interface ProjectContext {
   plugins: Plugin[];
   skills: Skill[];
   hooks: Hook[];
+  commands: Command[];
   claudeMd: string | null;
+  markdownFiles: MarkdownFile[];
+}
+
+export interface MarkdownFile {
+  path: string;
+  name: string;
+  scope: 'global' | 'local';
+  relativePath: string;
 }
 
 export interface KnownProject {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs/promises';
+import * as path from 'path';
 
 const SENSITIVE_KEYS = /token|key|secret|password|authorization/i;
 
@@ -53,6 +54,33 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       { error: 'File not found or unreadable', path: filePath },
       { status: 404 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { path: filePath, content } = body as { path: string; content: string };
+
+    if (!filePath || typeof content !== 'string') {
+      return NextResponse.json({ error: 'Missing path or content' }, { status: 400 });
+    }
+
+    // Only allow writing .md files
+    if (!filePath.endsWith('.md')) {
+      return NextResponse.json({ error: 'Only .md files can be written' }, { status: 403 });
+    }
+
+    // Ensure parent directory exists
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, content, 'utf-8');
+
+    return NextResponse.json({ success: true, path: filePath });
+  } catch (err) {
+    return NextResponse.json(
+      { error: 'Failed to write file', details: String(err) },
+      { status: 500 }
     );
   }
 }

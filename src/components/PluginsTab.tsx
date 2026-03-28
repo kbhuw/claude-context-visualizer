@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import type { Plugin } from '@/lib/types';
 
 interface PluginsTabProps {
@@ -37,8 +36,6 @@ function PluginCard({
   onSelectItem: (item: Record<string, unknown>) => void;
   onSelectSubItem?: (type: string, name: string) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-
   const initials = plugin.name
     .split(/[-_\s]/)
     .slice(0, 2)
@@ -53,13 +50,11 @@ function PluginCard({
     { label: 'MCP Servers', items: plugin.mcpServers, color: 'bg-green-50 text-green-600', type: 'mcpServer' },
   ];
 
-  const hasSubItems = subSections.some((s) => s.items.length > 0);
-
   return (
-    <div className="bg-white border border-[#e5e5e5] rounded-lg overflow-hidden">
+    <div className="bg-card border border-border rounded-lg overflow-hidden">
       <button
         onClick={() => onSelectItem(plugin as unknown as Record<string, unknown>)}
-        className="w-full text-left p-4 hover:bg-[#fafafa] transition-colors duration-150"
+        className="w-full text-left p-4 hover:bg-accent transition-colors duration-150"
       >
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center text-xs font-bold flex-shrink-0">
@@ -67,70 +62,49 @@ function PluginCard({
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-[#1a1a1a]">{plugin.name}</h3>
-              <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-gray-100 text-[#666]">
+              <h3 className="text-sm font-semibold text-foreground">{plugin.name}</h3>
+              <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-secondary text-muted-foreground">
                 v{plugin.version}
               </span>
               <span
                 className={`text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase ${
                   plugin.scope === 'global'
-                    ? 'bg-blue-50 text-blue-600'
-                    : 'bg-green-50 text-green-600'
+                    ? 'bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-100'
+                    : 'bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-100'
                 }`}
               >
                 {plugin.scope}
               </span>
             </div>
-            <p className="text-xs text-[#999] mt-0.5">{plugin.marketplace}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{plugin.marketplace}</p>
           </div>
         </div>
       </button>
 
-      {hasSubItems && (
-        <>
-          <div className="px-4 pb-1">
-            <button
-              onClick={() => setExpanded(!expanded)}
-              className="text-xs text-[#666] hover:text-[#1a1a1a] transition-colors duration-150 flex items-center gap-1"
-            >
-              <svg
-                className={`w-3 h-3 transition-transform duration-150 ${expanded ? 'rotate-90' : ''}`}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-              {expanded ? 'Hide' : 'Show'} contents
-            </button>
-          </div>
-
-          {expanded && (
-            <div className="px-4 pb-4 space-y-3">
-              {subSections
-                .filter((s) => s.items.length > 0)
-                .map((section) => (
-                  <div key={section.label}>
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-[#999] mb-1">
-                      {section.label}
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {section.items.map((item) => (
-                        <PillTag
-                          key={item}
-                          label={item}
-                          color={section.color}
-                          onClick={() => onSelectSubItem?.(section.type, item)}
-                        />
-                      ))}
-                    </div>
-                  </div>
+      <div className="px-4 pb-4 space-y-3">
+        <div className="text-xs text-muted-foreground space-y-0.5">
+          <div><span className="text-foreground font-medium">Install path:</span> {plugin.installPath || 'N/A'}</div>
+        </div>
+        {subSections
+          .filter((s) => s.items.length > 0)
+          .map((section) => (
+            <div key={section.label}>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                {section.label}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {section.items.map((item) => (
+                  <PillTag
+                    key={item}
+                    label={item}
+                    color={section.color}
+                    onClick={() => onSelectSubItem?.(section.type, item)}
+                  />
                 ))}
+              </div>
             </div>
-          )}
-        </>
-      )}
+          ))}
+      </div>
     </div>
   );
 }
@@ -138,7 +112,7 @@ function PluginCard({
 export default function PluginsTab({ plugins, onSelectItem, onSelectSubItem }: PluginsTabProps) {
   if (plugins.length === 0) {
     return (
-      <div className="text-center py-12 text-[#999] text-sm">
+      <div className="text-center py-12 text-muted-foreground text-sm">
         No plugins installed
       </div>
     );

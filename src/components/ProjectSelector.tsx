@@ -2,6 +2,13 @@
 
 import { useState } from 'react';
 import type { KnownProject } from '@/lib/types';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface ProjectSelectorProps {
   projects: KnownProject[];
@@ -16,65 +23,84 @@ export default function ProjectSelector({
   onSelectProject,
   loading,
 }: ProjectSelectorProps) {
-  const [customPath, setCustomPath] = useState('');
+  const [browsedPaths, setBrowsedPaths] = useState<string[]>([]);
 
   const sorted = [...projects].sort((a, b) => a.path.localeCompare(b.path));
+  const knownPaths = new Set(sorted.map((p) => p.path));
+  const extraPaths = browsedPaths.filter((p) => !knownPaths.has(p));
 
-  const handleCustomSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (customPath.trim()) {
-      onSelectProject(customPath.trim());
-      setCustomPath('');
+  const handleChange = async (val: string) => {
+    if (val === '__browse__') {
+      try {
+        const res = await fetch('/api/browse', { method: 'POST' });
+        const data = await res.json();
+        if (data.path && !data.cancelled) {
+          if (!knownPaths.has(data.path) && !browsedPaths.includes(data.path)) {
+            setBrowsedPaths((prev) => [...prev, data.path]);
+          }
+          onSelectProject(data.path);
+        }
+      } catch {
+        // silently ignore errors
+      }
+      return;
+    }
+    onSelectProject(val === '__global__' ? null : val);
+  };
+
+  const handleBrowse = async () => {
+    try {
+      const res = await fetch('/api/browse', { method: 'POST' });
+      const data = await res.json();
+      if (data.path && !data.cancelled) {
+        if (!knownPaths.has(data.path) && !browsedPaths.includes(data.path)) {
+          setBrowsedPaths((prev) => [...prev, data.path]);
+        }
+        onSelectProject(data.path);
+      }
+    } catch {
+      // silently ignore errors
     }
   };
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-      <div className="flex-1 min-w-0">
-        <label className="block text-xs font-medium text-[#666] mb-1.5">
-          Project
-        </label>
-        <select
-          value={selectedProject ?? '__global__'}
-          onChange={(e) => {
-            const val = e.target.value;
-            onSelectProject(val === '__global__' ? null : val);
-          }}
-          disabled={loading}
-          className="w-full h-9 px-3 text-sm bg-white border border-[#e5e5e5] rounded-lg text-[#1a1a1a] outline-none focus:border-[#999] transition-colors duration-150 appearance-none cursor-pointer disabled:opacity-50"
-        >
-          <option value="__global__">Global View</option>
-          {sorted.map((p) => (
-            <option key={p.path} value={p.path}>
-              {p.path}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <form onSubmit={handleCustomSubmit} className="flex gap-2 sm:flex-shrink-0">
-        <input
-          type="text"
-          placeholder="Custom path..."
-          value={customPath}
-          onChange={(e) => setCustomPath(e.target.value)}
-          className="h-9 px-3 text-sm bg-white border border-[#e5e5e5] rounded-lg text-[#1a1a1a] outline-none focus:border-[#999] transition-colors duration-150 placeholder:text-[#999] w-full sm:w-56"
-        />
-        <button
-          type="submit"
-          disabled={!customPath.trim() || loading}
-          className="h-9 px-4 text-sm font-medium bg-[#1a1a1a] text-white rounded-lg hover:bg-[#333] transition-colors duration-150 disabled:opacity-40 whitespace-nowrap"
-        >
-          Load
-        </button>
-      </form>
-
-      <button
-        onClick={() => onSelectProject(null)}
-        disabled={loading || selectedProject === null}
-        className="h-9 px-4 text-sm font-medium border border-[#e5e5e5] rounded-lg hover:bg-white transition-colors duration-150 disabled:opacity-40 whitespace-nowrap"
+    <div className="flex items-center gap-2">
+      <Select
+        value={selectedProject ?? '__global__'}
+        onValueChange={handleChange}
+        disabled={loading}
       >
-        Global View
+        <SelectTrigger className="flex-1 h-10 bg-background/50 border-border/60 text-sm">
+          <div className="flex items-center gap-2 min-w-0">
+            <svg className="w-4 h-4 text-muted-foreground flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-8.69-6.44-2.12-2.12a1.5 1.5 0 0 0-1.06-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z" />
+            </svg>
+            <SelectValue placeholder="Select a project" />
+          </div>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__global__">Global View</SelectItem>
+          {sorted.map((p) => (
+            <SelectItem key={p.path} value={p.path}>
+              {p.path}
+            </SelectItem>
+          ))}
+          {extraPaths.map((p) => (
+            <SelectItem key={p} value={p}>
+              {p}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <button
+        onClick={handleBrowse}
+        disabled={loading}
+        className="h-10 w-10 flex-shrink-0 inline-flex items-center justify-center rounded-md border border-border/60 bg-background/50 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-50"
+        title="Browse for folder"
+      >
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 10.5v6m3-3H9m4.06-7.19-2.12-2.12a1.5 1.5 0 0 0-1.06-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z" />
+        </svg>
       </button>
     </div>
   );
