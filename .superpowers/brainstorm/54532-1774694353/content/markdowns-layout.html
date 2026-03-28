@@ -1,0 +1,137 @@
+<h2>Markdowns Tab — Layout</h2>
+<p class="subtitle">How should the file list + editor + split view be arranged?</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 16px; background: #1a1a2e;">
+      <!-- Mockup A: Sidebar + Editor -->
+      <div style="display: flex; height: 260px; gap: 1px; border-radius: 8px; overflow: hidden; font-size: 11px; font-family: system-ui;">
+        <!-- Sidebar -->
+        <div style="width: 180px; background: #16213e; padding: 10px; flex-shrink: 0;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="color: #a8b2d1; font-size: 9px; text-transform: uppercase; letter-spacing: 1px;">Files</span>
+            <div style="display: flex; gap: 4px;">
+              <span style="background: #3b82f6; color: white; font-size: 8px; padding: 2px 5px; border-radius: 3px;">All</span>
+              <span style="background: #1a1a2e; color: #64748b; font-size: 8px; padding: 2px 5px; border-radius: 3px;">Claude</span>
+            </div>
+          </div>
+          <div style="color: #64748b; font-size: 9px; margin-bottom: 4px; text-transform: uppercase;">Global</div>
+          <div style="color: #e2e8f0; padding: 4px 6px; background: rgba(59,130,246,0.15); border-radius: 4px; margin-bottom: 2px; font-size: 10px;">CLAUDE.md</div>
+          <div style="color: #94a3b8; padding: 4px 6px; font-size: 10px; margin-bottom: 2px;">AGENTS.md</div>
+          <div style="color: #64748b; font-size: 9px; margin: 8px 0 4px; text-transform: uppercase;">Local</div>
+          <div style="color: #94a3b8; padding: 4px 6px; font-size: 10px; margin-bottom: 2px;">README.md</div>
+          <div style="color: #94a3b8; padding: 4px 6px; font-size: 10px; margin-bottom: 2px;">CLAUDE.md</div>
+          <div style="color: #94a3b8; padding: 4px 6px; font-size: 10px; margin-bottom: 2px;">CHANGELOG.md</div>
+          <div style="color: #94a3b8; padding: 4px 6px; font-size: 10px;">docs/API.md</div>
+        </div>
+        <!-- Editor area -->
+        <div style="flex: 1; background: #0f172a; display: flex; flex-direction: column;">
+          <!-- Tab bar -->
+          <div style="display: flex; align-items: center; background: #1e293b; padding: 0 8px; height: 32px; gap: 2px;">
+            <div style="background: #0f172a; color: #e2e8f0; padding: 4px 10px; border-radius: 4px 4px 0 0; font-size: 10px; display: flex; align-items: center; gap: 4px;">
+              CLAUDE.md <span style="color: #64748b; cursor: pointer;">×</span>
+            </div>
+            <div style="color: #64748b; padding: 4px 10px; font-size: 10px;">+ Split</div>
+          </div>
+          <!-- Toolbar -->
+          <div style="display: flex; align-items: center; padding: 4px 8px; gap: 6px; background: #1a1a2e; border-bottom: 1px solid #1e293b;">
+            <span style="color: #64748b; font-size: 10px; font-weight: 600; padding: 2px 6px; border: 1px solid #334155; border-radius: 3px;">Edit</span>
+            <span style="color: #94a3b8; font-size: 10px; padding: 2px 6px;">Preview</span>
+            <span style="flex:1"></span>
+            <span style="color: #22c55e; font-size: 9px;">● Saved</span>
+          </div>
+          <!-- Content -->
+          <div style="padding: 12px; color: #cbd5e1; font-size: 10px; line-height: 1.6; font-family: monospace;">
+            <span style="color: #64748b;"># Project Setup</span><br><br>
+            <span style="color: #94a3b8;">This project uses Next.js 16...</span><br><br>
+            <span style="color: #64748b;">## Getting Started</span><br><br>
+            <span style="color: #94a3b8;">Run `npm install` then...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A: Persistent Sidebar</h3>
+      <p>File list always visible on the left. Click to open files in editor tabs. "Split" button opens a second editor pane to the right. Feels like a mini VS Code.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 16px; background: #1a1a2e;">
+      <!-- Mockup B: Sidebar + Split editors -->
+      <div style="display: flex; height: 260px; gap: 1px; border-radius: 8px; overflow: hidden; font-size: 11px; font-family: system-ui;">
+        <!-- Sidebar -->
+        <div style="width: 160px; background: #16213e; padding: 10px; flex-shrink: 0;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="color: #a8b2d1; font-size: 9px; text-transform: uppercase; letter-spacing: 1px;">Files</span>
+          </div>
+          <div style="color: #64748b; font-size: 9px; margin-bottom: 4px; text-transform: uppercase;">Global</div>
+          <div style="color: #e2e8f0; padding: 4px 6px; background: rgba(59,130,246,0.15); border-left: 2px solid #3b82f6; font-size: 10px; margin-bottom: 2px;">CLAUDE.md</div>
+          <div style="color: #94a3b8; padding: 4px 6px; font-size: 10px; margin-bottom: 2px;">AGENTS.md</div>
+          <div style="color: #64748b; font-size: 9px; margin: 8px 0 4px; text-transform: uppercase;">Local</div>
+          <div style="color: #e2e8f0; padding: 4px 6px; background: rgba(34,197,94,0.15); border-left: 2px solid #22c55e; font-size: 10px; margin-bottom: 2px;">README.md</div>
+          <div style="color: #94a3b8; padding: 4px 6px; font-size: 10px; margin-bottom: 2px;">CLAUDE.md</div>
+          <div style="color: #94a3b8; padding: 4px 6px; font-size: 10px;">docs/API.md</div>
+        </div>
+        <!-- Split editors -->
+        <div style="flex: 1; display: flex; gap: 1px;">
+          <!-- Left editor -->
+          <div style="flex: 1; background: #0f172a; display: flex; flex-direction: column;">
+            <div style="display: flex; align-items: center; background: #1e293b; padding: 4px 8px; height: 28px; justify-content: space-between;">
+              <span style="color: #3b82f6; font-size: 10px;">CLAUDE.md</span>
+              <div style="display: flex; gap: 4px;">
+                <span style="color: #64748b; font-size: 9px; padding: 1px 4px; border: 1px solid #334155; border-radius: 2px;">Edit</span>
+                <span style="color: #94a3b8; font-size: 9px;">Preview</span>
+              </div>
+            </div>
+            <div style="padding: 8px; color: #94a3b8; font-size: 9px; font-family: monospace; line-height: 1.5;">
+              # Claude Config<br><br>
+              @AGENTS.md<br><br>
+              ## Rules<br>
+              Follow existing...
+            </div>
+          </div>
+          <!-- Right editor -->
+          <div style="flex: 1; background: #0f172a; display: flex; flex-direction: column;">
+            <div style="display: flex; align-items: center; background: #1e293b; padding: 4px 8px; height: 28px; justify-content: space-between;">
+              <span style="color: #22c55e; font-size: 10px;">README.md</span>
+              <div style="display: flex; gap: 4px;">
+                <span style="color: #94a3b8; font-size: 9px;">Edit</span>
+                <span style="color: #64748b; font-size: 9px; padding: 1px 4px; border: 1px solid #334155; border-radius: 2px;">Preview</span>
+              </div>
+            </div>
+            <div style="padding: 8px; color: #94a3b8; font-size: 9px; line-height: 1.5;">
+              <div style="font-size: 14px; font-weight: bold; color: #e2e8f0; margin-bottom: 6px;">Project Setup</div>
+              <p style="margin-bottom: 6px;">This project uses Next.js 16 with the app router...</p>
+              <div style="font-size: 12px; font-weight: 600; color: #e2e8f0; margin-bottom: 4px;">Getting Started</div>
+              <p>Run <code style="background: #1e293b; padding: 1px 4px; border-radius: 2px;">npm install</code> then...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B: Always-Split Ready</h3>
+      <p>Same sidebar, but the editor area is always split-capable. Click a file to open it in either pane. Each pane independently toggles Edit/Preview. Color-coded file indicators match scope (blue=global, green=local).</p>
+    </div>
+  </div>
+</div>
+
+<div class="pros-cons" style="margin-top: 24px;">
+  <div class="pros">
+    <h4>Option A — Persistent Sidebar</h4>
+    <ul>
+      <li>Familiar VS Code mental model</li>
+      <li>Full width for single-file editing</li>
+      <li>Split is opt-in, less visual clutter</li>
+    </ul>
+  </div>
+  <div class="cons">
+    <h4>Option B — Always-Split Ready</h4>
+    <ul>
+      <li>Compare is front-and-center, zero friction</li>
+      <li>Each pane has independent Edit/Preview toggle</li>
+      <li>Slightly less space per editor when split</li>
+    </ul>
+  </div>
+</div>

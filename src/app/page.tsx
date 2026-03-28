@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import type { KnownProject, ProjectContext } from '@/lib/types';
+import type { KnownProject, ProjectContext, ConfigSource } from '@/lib/types';
 import ProjectSelector from '@/components/ProjectSelector';
 import SourcesPanel from '@/components/SourcesPanel';
 import TabNav from '@/components/TabNav';
@@ -11,7 +11,10 @@ import PluginsTab from '@/components/PluginsTab';
 import SkillsTab from '@/components/SkillsTab';
 import HooksTab from '@/components/HooksTab';
 import ClaudeMdTab from '@/components/ClaudeMdTab';
+import MarkdownsTab from '@/components/MarkdownsTab';
 import DetailPanel from '@/components/DetailPanel';
+import ThemeToggle from '@/components/ThemeToggle';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export default function Home() {
   const [projects, setProjects] = useState<KnownProject[]>([]);
@@ -24,6 +27,7 @@ export default function Home() {
   // Detail panel state
   const [detailItem, setDetailItem] = useState<Record<string, unknown> | null>(null);
   const [detailType, setDetailType] = useState('');
+  const [customSources, setCustomSources] = useState<string[]>([]);
 
   // Fetch known projects on mount
   useEffect(() => {
@@ -34,13 +38,16 @@ export default function Home() {
   }, []);
 
   // Fetch context when project changes
-  const fetchContext = useCallback(async (projectPath: string | null) => {
+  const fetchContext = useCallback(async (projectPath: string | null, extraSources: string[] = []) => {
     setLoading(true);
     setError(null);
     try {
-      const url = projectPath
-        ? `/api/context?project=${encodeURIComponent(projectPath)}`
-        : '/api/context';
+      const params = new URLSearchParams();
+      if (projectPath) params.set('project', projectPath);
+      for (const src of extraSources) {
+        params.append('customSource', src);
+      }
+      const url = `/api/context?${params.toString()}`;
       const res = await fetch(url);
       if (!res.ok) throw new Error(`Failed to load context (${res.status})`);
       const data = await res.json();
@@ -54,8 +61,14 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    fetchContext(selectedProject);
-  }, [selectedProject, fetchContext]);
+    fetchContext(selectedProject, customSources);
+  }, [selectedProject, customSources, fetchContext]);
+
+  const handleAddSource = (sourcePath: string) => {
+    if (!customSources.includes(sourcePath)) {
+      setCustomSources((prev) => [...prev, sourcePath]);
+    }
+  };
 
   const handleSelectProject = (path: string | null) => {
     setSelectedProject(path);
@@ -73,35 +86,35 @@ export default function Home() {
     skills: context?.skills.length ?? 0,
     hooks: context?.hooks.length ?? 0,
     claudeMd: context?.claudeMd ? 1 : 0,
+    markdowns: context?.markdownFiles?.length ?? 0,
   };
 
   return (
-    <div className="min-h-screen bg-[#fafafa]">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="bg-white border-b border-[#e5e5e5]">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5">
-          <h1 className="text-lg font-semibold text-[#1a1a1a] tracking-tight">
-            Claude Context Visualizer
-          </h1>
-          <p className="text-sm text-[#666] mt-0.5">
-            Inspect and explore your Claude Code configuration across all sources
-          </p>
+      <header className="bg-card border-b border-border">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <h1 className="text-lg font-semibold text-foreground tracking-tight">
+              Claude Context Visualizer
+            </h1>
+            <ThemeToggle />
+          </div>
+          <ProjectSelector
+            projects={projects}
+            selectedProject={selectedProject}
+            onSelectProject={handleSelectProject}
+            loading={loading}
+          />
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-5">
-        {/* Project Selector */}
-        <ProjectSelector
-          projects={projects}
-          selectedProject={selectedProject}
-          onSelectProject={handleSelectProject}
-          loading={loading}
-        />
 
         {/* Loading */}
         {loading && (
           <div className="flex items-center justify-center py-16">
-            <div className="flex items-center gap-3 text-sm text-[#666]">
+            <div className="flex items-center gap-3 text-sm text-muted-foreground">
               <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -113,16 +126,28 @@ export default function Home() {
 
         {/* Error */}
         {error && !loading && (
-          <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-600">
-            {error}
-          </div>
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
 
         {/* Content */}
         {context && !loading && (
           <>
             {/* Sources Panel */}
-            <SourcesPanel sources={context.sources} />
+            <SourcesPanel
+              sources={context.sources}
+              onAddSource={handleAddSource}
+              onSelectSource={(source: ConfigSource) => {
+                handleSelectItem('source', {
+                  name: source.name,
+                  scope: source.scope,
+                  source: source.scope,
+                  path: source.path,
+                  found: source.found,
+                });
+              }}
+            />
 
             {/* Tabs */}
             <TabNav activeTab={activeTab} onTabChange={setActiveTab} counts={counts} />
@@ -173,6 +198,10 @@ export default function Home() {
               {activeTab === 'claudeMd' && (
                 <ClaudeMdTab content={context.claudeMd} />
               )}
+
+              {activeTab === 'markdowns' && (
+                <MarkdownsTab markdownFiles={context.markdownFiles ?? []} />
+              )}
             </div>
           </>
         )}
@@ -180,7 +209,7 @@ export default function Home() {
         {/* Empty state when no context and no loading */}
         {!context && !loading && !error && (
           <div className="text-center py-20">
-            <div className="text-[#999] text-sm">
+            <div className="text-muted-foreground text-sm">
               Select a project or use Global View to get started
             </div>
           </div>
@@ -192,6 +221,21 @@ export default function Home() {
         item={detailItem}
         type={detailType}
         onClose={() => setDetailItem(null)}
+        onNavigate={(navType, navItem) => {
+          // Find the full item from context by name and type
+          if (!context) return;
+          let found: Record<string, unknown> | undefined;
+          if (navType === 'skill') {
+            found = context.skills.find(s => s.name === navItem.name) as unknown as Record<string, unknown>;
+          } else if (navType === 'hook') {
+            found = context.hooks.find(h => h.name === navItem.name) as unknown as Record<string, unknown>;
+          } else if (navType === 'mcpServer') {
+            found = context.mcpServers.find(s => s.name === navItem.name) as unknown as Record<string, unknown>;
+          } else if (navType === 'command') {
+            found = context.commands?.find(c => c.name === navItem.name) as unknown as Record<string, unknown>;
+          }
+          handleSelectItem(navType, found || navItem);
+        }}
       />
     </div>
   );
