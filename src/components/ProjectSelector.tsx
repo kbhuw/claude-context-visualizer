@@ -24,6 +24,7 @@ export default function ProjectSelector({
   loading,
 }: ProjectSelectorProps) {
   const [browsedPaths, setBrowsedPaths] = useState<string[]>([]);
+  const [browsing, setBrowsing] = useState(false);
 
   const sorted = [...projects].sort((a, b) => a.path.localeCompare(b.path));
   const knownPaths = new Set(sorted.map((p) => p.path));
@@ -31,35 +32,43 @@ export default function ProjectSelector({
 
   const handleChange = async (val: string) => {
     if (val === '__browse__') {
-      try {
-        const res = await fetch('/api/browse', { method: 'POST' });
-        const data = await res.json();
-        if (data.path && !data.cancelled) {
-          if (!knownPaths.has(data.path) && !browsedPaths.includes(data.path)) {
-            setBrowsedPaths((prev) => [...prev, data.path]);
-          }
-          onSelectProject(data.path);
-        }
-      } catch {
-        // silently ignore errors
-      }
+      await handleBrowse();
       return;
     }
     onSelectProject(val === '__global__' ? null : val);
   };
 
+  const browseViaPrompt = () => {
+    const path = window.prompt('Enter the absolute path to your project folder:');
+    if (path && path.trim()) {
+      const trimmed = path.trim();
+      if (!knownPaths.has(trimmed) && !browsedPaths.includes(trimmed)) {
+        setBrowsedPaths((prev) => [...prev, trimmed]);
+      }
+      onSelectProject(trimmed);
+    }
+  };
+
   const handleBrowse = async () => {
+    if (browsing) return;
+    setBrowsing(true);
     try {
       const res = await fetch('/api/browse', { method: 'POST' });
       const data = await res.json();
-      if (data.path && !data.cancelled) {
+      if (data.error || data.cancelled) {
+        browseViaPrompt();
+        return;
+      }
+      if (data.path) {
         if (!knownPaths.has(data.path) && !browsedPaths.includes(data.path)) {
           setBrowsedPaths((prev) => [...prev, data.path]);
         }
         onSelectProject(data.path);
       }
     } catch {
-      // silently ignore errors
+      browseViaPrompt();
+    } finally {
+      setBrowsing(false);
     }
   };
 
@@ -94,7 +103,7 @@ export default function ProjectSelector({
       </Select>
       <button
         onClick={handleBrowse}
-        disabled={loading}
+        disabled={loading || browsing}
         className="h-10 w-10 flex-shrink-0 inline-flex items-center justify-center rounded-md border border-border/60 bg-background/50 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-50"
         title="Browse for folder"
       >

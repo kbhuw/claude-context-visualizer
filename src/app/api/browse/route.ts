@@ -6,10 +6,7 @@ const execAsync = promisify(exec);
 
 export async function POST() {
   if (process.platform !== 'darwin') {
-    return NextResponse.json(
-      { error: 'Browse is only supported on macOS' },
-      { status: 501 }
-    );
+    return NextResponse.json({ error: 'Browse is only supported on macOS' });
   }
 
   try {
