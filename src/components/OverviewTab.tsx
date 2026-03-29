@@ -38,7 +38,15 @@ interface CardSection {
   type: string;
 }
 
-/** Group skills by their source (e.g., "superpowers", "frontend-design", "Skills Directory") */
+/** Sort order for skill groups — Global Skills and Local Skills first */
+function skillGroupOrder(name: string): number {
+  if (name === 'Global Skills') return 0;
+  if (name === 'Local Skills') return 1;
+  if (name === 'Global Agents' || name === 'Local Agents') return 99;
+  return 50;
+}
+
+/** Group skills by their source (e.g., "superpowers", "frontend-design", "Global Skills") */
 function groupSkillsBySource(skills: Skill[]): Map<string, Skill[]> {
   const groups = new Map<string, Skill[]>();
 
@@ -155,10 +163,18 @@ function SkillGroup({
         ) : (
           <ChevronRight className="w-4 h-4 text-foreground/70" />
         )}
-        <span className="text-xs font-bold uppercase tracking-wider text-foreground/80 group-hover:text-foreground transition-colors">
+        <span className={`text-xs font-bold uppercase tracking-wider group-hover:text-foreground transition-colors ${
+          (groupName === 'Global Agents' || groupName === 'Local Agents') ? 'text-red-600 dark:text-red-400'
+          : groupName === 'Global Skills' ? 'text-green-700 dark:text-green-400'
+          : groupName === 'Local Skills' ? 'text-green-500 dark:text-green-300'
+          : 'text-foreground/80'
+        }`}>
           {groupName}
         </span>
         <span className="text-[10px] font-medium text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 leading-none">{skills.length}</span>
+        {(groupName === 'Global Agents' || groupName === 'Local Agents') && (
+          <span className="text-[10px] font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950 px-1.5 py-0.5 rounded">NOT INVOCABLE</span>
+        )}
         {groupTotal && (
           <span className="text-[10px] font-mono text-muted-foreground ml-auto">{groupTotal}</span>
         )}
@@ -171,18 +187,35 @@ function SkillGroup({
               onClick={() => onSelectItem('skill', skill as unknown as Record<string, unknown>)}
               className="w-full flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-md hover:bg-accent transition-colors duration-150 text-left"
             >
-              <span className="text-foreground truncate">{skill.name}</span>
+              <span className={`truncate ${
+                (skill.source === 'Global Agents' || skill.source === 'Local Agents') ? 'text-red-600 dark:text-red-400'
+                : skill.source === 'Global Skills' ? 'text-green-700 dark:text-green-400 font-semibold'
+                : skill.source === 'Local Skills' ? 'text-green-500 dark:text-green-300 font-semibold'
+                : 'text-foreground'
+              }`}>
+                {skill.name}
+                {skill.alsoInAgents && <span className="ml-1 text-[10px] font-normal text-amber-600 dark:text-amber-400">+agents</span>}
+              </span>
               <div className="flex items-center gap-2 flex-shrink-0">
+                {(skill.source === 'Global Agents' || skill.source === 'Local Agents') && (
+                  <span className="text-[10px] font-semibold text-red-600 dark:text-red-400">NOT INVOCABLE</span>
+                )}
                 {metric !== 'off' && (() => {
                   const val = getMetricValue(skill, metric);
                   return val ? <span className="text-[10px] font-mono text-muted-foreground">{val}</span> : null;
                 })()}
                 <Badge className={`${
-                  skill.scope === 'local'
-                    ? 'bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-100'
-                    : 'bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-100'
+                  (skill.source === 'Global Agents' || skill.source === 'Local Agents')
+                    ? 'bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400'
+                    : skill.source === 'Global Skills'
+                      ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300'
+                    : skill.source === 'Local Skills'
+                      ? 'bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-200'
+                    : skill.scope === 'local'
+                      ? 'bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-100'
+                      : 'bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-100'
                 }`}>
-                  {skill.scope === 'local' ? 'app' : 'global'}
+                  {(skill.source === 'Global Agents' || skill.source === 'Local Agents') ? '⚠ agents' : skill.scope === 'local' ? 'app' : 'global'}
                 </Badge>
               </div>
             </button>
@@ -231,7 +264,7 @@ function SkillsBrowseModal({
   if (!open) return null;
 
   const groups = groupSkillsBySource(skills);
-  const sortedGroups = Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  const sortedGroups = Array.from(groups.entries()).sort((a, b) => skillGroupOrder(a[0]) - skillGroupOrder(b[0]) || a[0].localeCompare(b[0]));
   const totalLabel = getGroupMetricTotal(skills, metric);
 
   return (
@@ -315,7 +348,7 @@ function SkillsCard({
     onModalChange?.(open);
   }, [onModalChange]);
   const groups = groupSkillsBySource(skills);
-  const sortedGroups = Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  const sortedGroups = Array.from(groups.entries()).sort((a, b) => skillGroupOrder(a[0]) - skillGroupOrder(b[0]) || a[0].localeCompare(b[0]));
 
   const handleModalSelectItem = useCallback((type: string, item: Record<string, unknown>) => {
     // Keep modal open, open the side sheet
