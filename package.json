@@ -7,8 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "scan": "npx tsx src/cli.ts",
-    "mcp-introspect": "npx tsx src/cli/mcp-introspect.ts"
+    "scan": "bunx tsx src/cli.ts",
+    "mcp-introspect": "bunx tsx src/cli/mcp-introspect.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.28.0",
