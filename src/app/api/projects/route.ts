@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
-import { KnownProject } from '@/lib/types';
+import type { KnownProject, ConductorProject } from '@/lib/types';
 
 /**
  * Reconstruct a filesystem path from a Claude projects slug.
@@ -10,13 +10,11 @@ import { KnownProject } from '@/lib/types';
  * so we greedily resolve segments by checking what exists on disk.
  */
 async function slugToProjectPath(slug: string): Promise<string | null> {
-  // Remove leading dash (represents leading /)
   const parts = slug.replace(/^-/, '').split('-');
   let current = '/';
 
   let i = 0;
   while (i < parts.length) {
-    // Try longest possible segment first (greedy)
     let matched = false;
     for (let end = parts.length; end > i; end--) {
       const candidate = parts.slice(i, end).join('-');
@@ -33,13 +31,37 @@ async function slugToProjectPath(slug: string): Promise<string | null> {
         // doesn't exist, try shorter
       }
     }
-    if (!matched) {
-      // Can't resolve this slug to a real path
-      return null;
-    }
+    if (!matched) return null;
   }
 
   return current;
+}
+
+/**
+ * Given a worktree directory, resolve its main repo path by reading the .git file.
+ * Worktree .git files contain: gitdir: <main-repo>/.git/worktrees/<name>
+ */
+async function resolveMainRepo(worktreePath: string): Promise<string | null> {
+  try {
+    const gitPath = path.join(worktreePath, '.git');
+    const stat = await fs.stat(gitPath);
+    if (stat.isFile()) {
+      const content = (await fs.readFile(gitPath, 'utf-8')).trim();
+      const match = content.match(/^gitdir:\s*(.+)$/);
+      if (match) {
+        // e.g. /Users/kush/Documents/puffle/puffle-app/.git/worktrees/biarritz-v2
+        // We want: /Users/kush/Documents/puffle/puffle-app
+        const gitdir = match[1];
+        const worktreesIdx = gitdir.indexOf('/.git/worktrees/');
+        if (worktreesIdx !== -1) {
+          return gitdir.substring(0, worktreesIdx);
+        }
+      }
+    }
+  } catch {
+    // not a worktree or unreadable
+  }
+  return null;
 }
 
 export async function GET() {
@@ -68,9 +90,7 @@ export async function GET() {
       // client state not readable
     }
 
-    // 2. Discover projects from ~/.claude/projects/ directory
-    // These contain session data and memory for projects Claude Code has been used in,
-    // even if they aren't registered in ~/.claude.json (e.g. Conductor workspaces)
+    // 2. Discover from ~/.claude/projects/ directory
     try {
       const projectsDir = path.join(home, '.claude', 'projects');
       const entries = await fs.readdir(projectsDir, { withFileTypes: true });
@@ -85,8 +105,74 @@ export async function GET() {
       // projects dir not readable
     }
 
-    return NextResponse.json(projects);
+    // 3. Discover Conductor projects: group by project name with main repo + worktrees
+    const conductorDir = path.join(home, 'conductor');
+    const conductorProjects: ConductorProject[] = [];
+    const projectMap = new Map<string, ConductorProject>();
+
+    // 3a. Scan ~/conductor/workspaces/<project>/<worktree> and resolve main repos
+    try {
+      const wsDir = path.join(conductorDir, 'workspaces');
+      const wsEntries = await fs.readdir(wsDir, { withFileTypes: true });
+      for (const wsEntry of wsEntries) {
+        if (!wsEntry.isDirectory()) continue;
+        const projectName = wsEntry.name;
+        const proj: ConductorProject = { name: projectName, mainRepo: null, worktrees: [] };
+
+        try {
+          const worktrees = await fs.readdir(path.join(wsDir, projectName), { withFileTypes: true });
+          for (const wt of worktrees) {
+            if (!wt.isDirectory()) continue;
+            const wtPath = path.join(wsDir, projectName, wt.name);
+            proj.worktrees.push({ name: wt.name, path: wtPath });
+
+            // Try to resolve main repo from this worktree's .git pointer
+            if (!proj.mainRepo) {
+              const mainRepo = await resolveMainRepo(wtPath);
+              if (mainRepo) proj.mainRepo = mainRepo;
+            }
+          }
+        } catch {
+          // worktree dir not readable
+        }
+
+        // Sort worktrees alphabetically
+        proj.worktrees.sort((a, b) => a.name.localeCompare(b.name));
+        projectMap.set(projectName, proj);
+      }
+    } catch {
+      // workspaces dir not readable
+    }
+
+    // 3b. Also check ~/conductor/repos/ — if a project doesn't have a mainRepo yet,
+    //     or if a repo exists here but has no worktrees, include it
+    try {
+      const reposDir = path.join(conductorDir, 'repos');
+      const repoEntries = await fs.readdir(reposDir, { withFileTypes: true });
+      for (const entry of repoEntries) {
+        if (!entry.isDirectory()) continue;
+        const repoPath = path.join(reposDir, entry.name);
+        const existing = projectMap.get(entry.name);
+        if (existing) {
+          // Prefer conductor/repos/ as main repo if worktree resolution didn't find one,
+          // or if it already points here
+          if (!existing.mainRepo) existing.mainRepo = repoPath;
+        } else {
+          // Repo with no worktrees
+          projectMap.set(entry.name, { name: entry.name, mainRepo: repoPath, worktrees: [] });
+        }
+      }
+    } catch {
+      // repos dir not readable
+    }
+
+    // Sort projects alphabetically
+    for (const proj of [...projectMap.values()].sort((a, b) => a.name.localeCompare(b.name))) {
+      conductorProjects.push(proj);
+    }
+
+    return NextResponse.json({ projects, conductorProjects, conductorDir });
   } catch {
-    return NextResponse.json([], { status: 200 });
+    return NextResponse.json({ projects: [], conductorProjects: [], conductorDir: null }, { status: 200 });
   }
 }

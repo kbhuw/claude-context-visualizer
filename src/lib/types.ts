@@ -81,4 +81,12 @@ export interface MarkdownFile {
 export interface KnownProject {
   path: string;
   lastActive?: string;
+  group?: 'conductor-repo' | 'conductor-worktree' | 'other';
+}
+
+/** A Conductor project: main repo + worktrees */
+export interface ConductorProject {
+  name: string;
+  mainRepo: string | null;  // resolved from worktree .git pointers or conductor/repos/
+  worktrees: { name: string; path: string }[];
 }
