@@ -26,6 +26,7 @@ import {
   Link as LinkIcon,
   Undo,
   Redo,
+  Save,
 } from 'lucide-react';
 
 interface MarkdownEditorProps {
@@ -303,8 +304,18 @@ export default function MarkdownEditor({
           <Redo size={iconSize} />
         </ToolbarButton>
 
-        {/* Save status */}
+        {/* Save button & status */}
         <div className="ml-auto flex items-center gap-1.5 text-[11px] pr-1">
+          <ToolbarButton
+            onClick={() => {
+              if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+              save(contentRef.current);
+            }}
+            disabled={saveStatus === 'saved' || saveStatus === 'saving'}
+            title="Save (⌘S)"
+          >
+            <Save size={iconSize} />
+          </ToolbarButton>
           {saveStatus === 'saved' && (
             <span className="text-green-500 flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
