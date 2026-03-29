@@ -468,6 +468,66 @@ function projectPathToSlug(projectPath: string): string {
   return projectPath.replace(/\//g, '-');
 }
 
+/** Extract built-in skill names from the Claude Code binary using `strings` */
+async function extractBuiltinSkills(claudeBinaryPath: string): Promise<Skill[]> {
+  const { execFile } = await import('child_process');
+  const { promisify } = await import('util');
+  const execFileAsync = promisify(execFile);
+
+  try {
+    // Search for the Nz({name:"..." pattern that registers built-in skills
+    const { stdout } = await execFileAsync('strings', [claudeBinaryPath], { maxBuffer: 100 * 1024 * 1024 });
+    const skills: Skill[] = [];
+    const seen = new Set<string>();
+
+    // Match skill registrations: Nz({name:"skillname",description:'...'
+    const regex = /Nz\(\{name:"([^"]+)",description:['"]([^'"]*)['"]/g;
+    let match;
+    while ((match = regex.exec(stdout)) !== null) {
+      const name = match[1];
+      const description = match[2];
+      if (!seen.has(name)) {
+        seen.add(name);
+        skills.push({
+          name,
+          scope: 'global',
+          source: 'Built-in',
+          description,
+          filePath: claudeBinaryPath,
+        });
+      }
+    }
+
+    return skills;
+  } catch {
+    return [];
+  }
+}
+
+/** Find the Claude Code binary path */
+async function findClaudeBinary(): Promise<string | null> {
+  const { execFile } = await import('child_process');
+  const { promisify } = await import('util');
+  const execFileAsync = promisify(execFile);
+
+  try {
+    const { stdout } = await execFileAsync('which', ['claude']);
+    const binaryPath = stdout.trim();
+    if (binaryPath && await fileExists(binaryPath)) return binaryPath;
+  } catch {
+    // try common paths
+  }
+
+  const commonPaths = [
+    path.join(os.homedir(), '.local', 'bin', 'claude'),
+    '/usr/local/bin/claude',
+  ];
+  for (const p of commonPaths) {
+    if (await fileExists(p)) return p;
+  }
+  return null;
+}
+
 export async function scanContext(projectPath: string | null, customSources: string[] = [], extraMarkdownDirs: string[] = []): Promise<ProjectContext> {
   const home = os.homedir();
   const sources: ConfigSource[] = [];
@@ -998,6 +1058,18 @@ export async function scanContext(projectPath: string | null, customSources: str
       description: cmd.description,
       filePath: cmd.filePath,
     });
+  }
+
+  // Extract built-in skills from the Claude Code binary
+  const claudeBinary = await findClaudeBinary();
+  if (claudeBinary) {
+    const builtinSkills = await extractBuiltinSkills(claudeBinary);
+    const allSkillNames = new Set(allSkills.map(s => s.name));
+    for (const skill of builtinSkills) {
+      if (!allSkillNames.has(skill.name)) {
+        allSkills.push(skill);
+      }
+    }
   }
 
   return {
