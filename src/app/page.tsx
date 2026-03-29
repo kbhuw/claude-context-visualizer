@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import type { KnownProject, ProjectContext, ConfigSource } from '@/lib/types';
+import type { KnownProject, ConductorProject, ProjectContext, ConfigSource } from '@/lib/types';
 import ProjectSelector from '@/components/ProjectSelector';
 import SourcesPanel from '@/components/SourcesPanel';
 import TabNav from '@/components/TabNav';
@@ -14,7 +14,9 @@ import { useMcpAutoConnect } from '@/hooks/useMcpAutoConnect';
 
 export default function Home() {
   const [projects, setProjects] = useState<KnownProject[]>([]);
+  const [conductorProjects, setConductorProjects] = useState<ConductorProject[]>([]);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const [defaultResolved, setDefaultResolved] = useState(false);
   const [context, setContext] = useState<ProjectContext | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(false);
@@ -30,13 +32,20 @@ export default function Home() {
   // Auto-connect to all MCP servers and cache results
   const mcpStatus = useMcpAutoConnect(context?.mcpServers ?? []);
 
-  // Fetch known projects on mount
+  // Fetch known projects on mount and default to ~/conductor
   useEffect(() => {
     fetch('/api/projects')
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data) => setProjects(data))
+      .then((res) => (res.ok ? res.json() : { projects: [], conductorDir: null }))
+      .then((data: { projects: KnownProject[]; conductorProjects: ConductorProject[]; conductorDir: string | null }) => {
+        setProjects(data.projects);
+        setConductorProjects(data.conductorProjects ?? []);
+        if (!defaultResolved && data.conductorDir) {
+          setSelectedProject(data.conductorDir);
+          setDefaultResolved(true);
+        }
+      })
       .catch(() => setProjects([]));
-  }, []);
+  }, [defaultResolved]);
 
   // Fetch context when project changes
   const fetchContext = useCallback(async (projectPath: string | null, extraSources: string[] = [], mdDirs: string[] = []) => {
@@ -103,6 +112,7 @@ export default function Home() {
           </div>
           <ProjectSelector
             projects={projects}
+            conductorProjects={conductorProjects}
             selectedProject={selectedProject}
             onSelectProject={handleSelectProject}
             loading={loading}

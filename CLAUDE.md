@@ -43,6 +43,18 @@ The app has two modes: **web UI** and **CLI**.
 
 **API routes**: `/api/context` is the main endpoint that triggers scanning. Other routes handle file browsing, reading/writing files, MCP introspection, and project discovery.
 
+## Conductor Integration
+
+The app is designed to work with the Conductor workflow manager. Conductor organizes projects as:
+
+- `~/conductor/repos/<repo>/` — Main git repos (source of truth). Not all projects live here; some repos exist elsewhere (e.g. `~/Documents/`).
+- `~/conductor/workspaces/<project>/<worktree>/` — Active git worktrees where agents work. These always live here regardless of where the main repo is.
+- `~/conductor/archived-contexts/` — Old/completed worktree contexts.
+
+**Project discovery** (`/api/projects`): Scans `~/conductor/workspaces/` for worktrees, reads each worktree's `.git` file to resolve the main repo path (which may be in `conductor/repos/` or elsewhere), and groups everything into `ConductorProject` objects (name, mainRepo, worktrees[]). Also discovers projects from `~/.claude.json` and `~/.claude/projects/`.
+
+**Project selector UI** (`ProjectSelector.tsx`): Card-based picker with color-coded cards per conductor project. Clicking a project card expands a list showing the main repo and worktrees. Global View and Other (file picker) are separate cards. The app defaults to `~/conductor` on load.
+
 ## Conventions
 
 - UI components use shadcn/ui patterns with Radix primitives
