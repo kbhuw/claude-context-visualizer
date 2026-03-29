@@ -1,6 +1,11 @@
 {
   "version": 1,
   "skills": {
+    "check": {
+      "source": "continuedev/skills",
+      "sourceType": "github",
+      "computedHash": "ff026d52f964332562e2a10053f9935f619bf4d3ae04d50d3cc1c478d34ba007"
+    },
     "expect": {
       "source": "millionco/expect",
       "sourceType": "github",
