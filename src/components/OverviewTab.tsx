@@ -57,19 +57,92 @@ function groupSkillsBySource(skills: Skill[]): Map<string, Skill[]> {
   return groups;
 }
 
+type SizeMetric = 'off' | 'size' | 'lines' | 'tokens';
+
+/** Format bytes into a human-readable string */
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** Format a number with commas */
+function formatNumber(n: number): string {
+  return n.toLocaleString();
+}
+
+/** Get the metric value for a skill */
+function getMetricValue(skill: Skill, metric: SizeMetric): string | null {
+  switch (metric) {
+    case 'size': return skill.size != null ? formatSize(skill.size) : null;
+    case 'lines': return skill.lines != null ? `${formatNumber(skill.lines)} lines` : null;
+    case 'tokens': return skill.tokens != null ? `${formatNumber(skill.tokens)} tok` : null;
+    default: return null;
+  }
+}
+
+/** Get the total metric value for a group of skills */
+function getGroupMetricTotal(skills: Skill[], metric: SizeMetric): string | null {
+  if (metric === 'off') return null;
+  const total = skills.reduce((sum, s) => {
+    const val = metric === 'size' ? s.size : metric === 'lines' ? s.lines : s.tokens;
+    return sum + (val || 0);
+  }, 0);
+  if (total === 0) return null;
+  switch (metric) {
+    case 'size': return formatSize(total);
+    case 'lines': return `${formatNumber(total)} lines`;
+    case 'tokens': return `${formatNumber(total)} tok`;
+    default: return null;
+  }
+}
+
+/** Metric toggle buttons */
+function MetricToggle({ metric, onChange, size = 'sm' }: { metric: SizeMetric; onChange: (m: SizeMetric) => void; size?: 'sm' | 'md' }) {
+  const options: { value: SizeMetric; label: string }[] = [
+    { value: 'lines', label: 'Lines' },
+    { value: 'tokens', label: 'Tokens' },
+    { value: 'size', label: 'Size' },
+  ];
+  const textSize = size === 'sm' ? 'text-[10px]' : 'text-xs';
+  const px = size === 'sm' ? 'px-1.5 py-0.5' : 'px-2 py-1';
+
+  return (
+    <div className="flex items-center gap-0.5 bg-muted rounded-md p-0.5">
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          onClick={() => onChange(metric === opt.value ? 'off' : opt.value)}
+          className={`${textSize} ${px} rounded font-medium transition-colors ${
+            metric === opt.value
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** Collapsible skill group used in both the card and the modal */
 function SkillGroup({
   groupName,
   skills,
   defaultExpanded,
+  metric,
   onSelectItem,
 }: {
   groupName: string;
   skills: Skill[];
   defaultExpanded: boolean;
+  metric: SizeMetric;
   onSelectItem: (type: string, item: Record<string, unknown>) => void;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
+
+  const groupTotal = getGroupMetricTotal(skills, metric);
 
   return (
     <div>
@@ -86,6 +159,9 @@ function SkillGroup({
           {groupName}
         </span>
         <span className="text-[10px] font-medium text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 leading-none">{skills.length}</span>
+        {groupTotal && (
+          <span className="text-[10px] font-mono text-muted-foreground ml-auto">{groupTotal}</span>
+        )}
       </button>
       {expanded && (
         <div className="space-y-0.5 ml-6">
@@ -96,13 +172,19 @@ function SkillGroup({
               className="w-full flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-md hover:bg-accent transition-colors duration-150 text-left"
             >
               <span className="text-foreground truncate">{skill.name}</span>
-              <Badge className={`flex-shrink-0 ${
-                skill.scope === 'local'
-                  ? 'bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-100'
-                  : 'bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-100'
-              }`}>
-                {skill.scope === 'local' ? 'app' : 'global'}
-              </Badge>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {metric !== 'off' && (() => {
+                  const val = getMetricValue(skill, metric);
+                  return val ? <span className="text-[10px] font-mono text-muted-foreground">{val}</span> : null;
+                })()}
+                <Badge className={`${
+                  skill.scope === 'local'
+                    ? 'bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-100'
+                    : 'bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-100'
+                }`}>
+                  {skill.scope === 'local' ? 'app' : 'global'}
+                </Badge>
+              </div>
             </button>
           ))}
         </div>
@@ -128,6 +210,7 @@ function SkillsBrowseModal({
   onSelectItem: (type: string, item: Record<string, unknown>) => void;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
+  const [metric, setMetric] = useState<SizeMetric>('off');
 
   // Escape: if sheet is open, close it first; otherwise close the modal
   useEffect(() => {
@@ -149,6 +232,7 @@ function SkillsBrowseModal({
 
   const groups = groupSkillsBySource(skills);
   const sortedGroups = Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  const totalLabel = getGroupMetricTotal(skills, metric);
 
   return (
     <div className="fixed inset-0 z-[60]">
@@ -175,15 +259,21 @@ function SkillsBrowseModal({
               <span className="w-2.5 h-2.5 rounded-full bg-pink-500" />
               Skills
               <span className="text-sm font-normal text-muted-foreground">{skills.length}</span>
+              {totalLabel && (
+                <span className="text-xs font-mono text-muted-foreground">({totalLabel} total)</span>
+              )}
             </h2>
             <p className="text-sm text-muted-foreground">Browse all skills grouped by type. Click a skill to view details.</p>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-3">
+            <MetricToggle metric={metric} onChange={setMetric} size="md" />
+            <button
+              onClick={onClose}
+              className="rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
         {/* Scrollable body */}
         <div className="overflow-y-auto flex-1 space-y-2 px-6 pb-6 pr-5">
@@ -193,6 +283,7 @@ function SkillsBrowseModal({
               groupName={groupName}
               skills={groupSkills}
               defaultExpanded={true}
+              metric={metric}
               onSelectItem={onSelectItem}
             />
           ))}
@@ -217,6 +308,7 @@ function SkillsCard({
   onCloseSheet?: () => void;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
+  const [metric, setMetric] = useState<SizeMetric>('off');
 
   const updateModalOpen = useCallback((open: boolean) => {
     setModalOpen(open);
@@ -233,14 +325,17 @@ function SkillsCard({
   return (
     <>
       <div className="bg-card border border-border rounded-lg p-4">
-        <button
-          onClick={() => updateModalOpen(true)}
-          className="flex items-center gap-2 mb-3 w-full text-left group cursor-pointer"
-        >
-          <span className="w-2 h-2 rounded-full bg-pink-500" />
-          <h3 className="text-sm font-semibold text-foreground group-hover:text-pink-500 transition-colors">Skills</h3>
-          <span className="text-xs text-muted-foreground">{skills.length}</span>
-        </button>
+        <div className="flex items-center justify-between mb-3">
+          <button
+            onClick={() => updateModalOpen(true)}
+            className="flex items-center gap-2 text-left group cursor-pointer"
+          >
+            <span className="w-2 h-2 rounded-full bg-pink-500" />
+            <h3 className="text-sm font-semibold text-foreground group-hover:text-pink-500 transition-colors">Skills</h3>
+            <span className="text-xs text-muted-foreground">{skills.length}</span>
+          </button>
+          <MetricToggle metric={metric} onChange={setMetric} />
+        </div>
         <div className="space-y-1 max-h-72 overflow-y-auto">
           {sortedGroups.map(([groupName, groupSkills]) => (
             <SkillGroup
@@ -248,6 +343,7 @@ function SkillsCard({
               groupName={groupName}
               skills={groupSkills}
               defaultExpanded={false}
+              metric={metric}
               onSelectItem={onSelectItem}
             />
           ))}

@@ -89,6 +89,43 @@ async function resolveIncludes(content: string, baseDir: string, depth = 0): Pro
   return resolved.join('\n');
 }
 
+interface DirStats {
+  size: number;
+  lines: number;
+  chars: number;
+}
+
+/** Recursively compute total size, lines, and character count of a directory */
+async function dirStats(dirPath: string): Promise<DirStats> {
+  const result: DirStats = { size: 0, lines: 0, chars: 0 };
+  try {
+    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dirPath, entry.name);
+      if (entry.isDirectory()) {
+        const sub = await dirStats(fullPath);
+        result.size += sub.size;
+        result.lines += sub.lines;
+        result.chars += sub.chars;
+      } else if (entry.isFile()) {
+        try {
+          const s = await fs.stat(fullPath);
+          result.size += s.size;
+          const content = await fs.readFile(fullPath, 'utf-8');
+          result.lines += content.split('\n').length;
+          result.chars += content.length;
+        } catch { /* skip binary or unreadable files */ }
+      }
+    }
+  } catch { /* skip */ }
+  return result;
+}
+
+/** Estimate token count from character count (~1 token per 4 chars) */
+function estimateTokens(chars: number): number {
+  return Math.round(chars / 4);
+}
+
 /** Read a skill from a directory or .md file, returning parsed metadata */
 async function readSkillEntry(
   entryPath: string,
@@ -104,6 +141,7 @@ async function readSkillEntry(
       const skillMd = files.find(f => f === 'SKILL.md');
       const anyMd = files.find(f => f.endsWith('.md'));
       const mdFile = skillMd || anyMd;
+      const stats = await dirStats(entryPath);
 
       if (mdFile) {
         const mdPath = path.join(entryPath, mdFile);
@@ -115,18 +153,25 @@ async function readSkillEntry(
           source,
           description: fm.description,
           filePath: mdPath,
+          size: stats.size,
+          lines: stats.lines,
+          tokens: estimateTokens(stats.chars),
         };
       }
-      return { name: entryName, scope, source, filePath: entryPath };
+      return { name: entryName, scope, source, filePath: entryPath, size: stats.size, lines: stats.lines, tokens: estimateTokens(stats.chars) };
     } else if (entryName.endsWith('.md')) {
       const content = await fs.readFile(entryPath, 'utf-8');
       const fm = parseFrontmatter(content);
+      const lines = content.split('\n').length;
       return {
         name: fm.name || entryName.replace(/\.md$/, ''),
         scope,
         source,
         description: fm.description,
         filePath: entryPath,
+        size: stat.size,
+        lines,
+        tokens: estimateTokens(content.length),
       };
     }
     return null;
@@ -1051,12 +1096,26 @@ export async function scanContext(projectPath: string | null, customSources: str
   for (const cmd of allCommands) {
     const key = `${cmd.scope}:${cmd.name}`;
     if (existingSkillNames.has(key)) continue; // avoid duplicates
+    // Get file stats for the command
+    let cmdSize: number | undefined;
+    let cmdLines: number | undefined;
+    let cmdTokens: number | undefined;
+    try {
+      const content = await fs.readFile(cmd.filePath, 'utf-8');
+      const s = await fs.stat(cmd.filePath);
+      cmdSize = s.size;
+      cmdLines = content.split('\n').length;
+      cmdTokens = estimateTokens(content.length);
+    } catch { /* skip */ }
     allSkills.push({
       name: cmd.name,
       scope: cmd.scope,
       source: `${cmd.source} (command)`,
       description: cmd.description,
       filePath: cmd.filePath,
+      size: cmdSize,
+      lines: cmdLines,
+      tokens: cmdTokens,
     });
   }
 
