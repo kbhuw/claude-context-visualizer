@@ -693,6 +693,33 @@ export async function scanContext(projectPath: string | null, customSources: str
     }
   }
 
+  // 4a. Global .agents/skills/ directory (~/.agents/skills/)
+  const globalAgentsSkillsDir = path.join(home, '.agents', 'skills');
+  const globalAgentsSkillsFound = await fileExists(globalAgentsSkillsDir);
+  if (globalAgentsSkillsFound) {
+    sources.push({
+      scope: 'global',
+      name: 'Agents Skills Directory',
+      path: globalAgentsSkillsDir,
+      found: true,
+    });
+    const agentSkillEntries = await listDir(globalAgentsSkillsDir);
+    for (const entry of agentSkillEntries) {
+      // Skip if already found via symlink in ~/.claude/skills/
+      const alreadyFound = allSkills.some(s => s.name === entry);
+      if (alreadyFound) continue;
+      const skill = await readSkillEntry(
+        path.join(globalAgentsSkillsDir, entry),
+        entry,
+        'global',
+        'Agents Skills Directory',
+      );
+      if (skill) allSkills.push(skill);
+    }
+  }
+
+  // 4b. Surface commands as skills — moved to end of function after all commands are collected
+
   // 4b. Global Commands Directory (~/.claude/commands/)
   const globalCommandsDirPath = path.join(home, '.claude', 'commands');
   const globalCommandsDirFound = await fileExists(globalCommandsDirPath);
@@ -802,6 +829,31 @@ export async function scanContext(projectPath: string | null, customSources: str
           entry,
           'local',
           'Project Skills',
+        );
+        if (skill) allSkills.push(skill);
+      }
+    }
+
+    // 8b. Project-local .agents/skills/ (<project>/.agents/skills/)
+    const localAgentsSkillsDir = path.join(projectPath, '.agents', 'skills');
+    const localAgentsSkillsDirFound = await fileExists(localAgentsSkillsDir);
+    if (localAgentsSkillsDirFound) {
+      sources.push({
+        scope: 'local',
+        name: 'Project Agents Skills',
+        path: localAgentsSkillsDir,
+        found: true,
+      });
+      const entries = await listDir(localAgentsSkillsDir);
+      for (const entry of entries) {
+        // Skip if already found via symlink in .claude/skills/
+        const alreadyFound = allSkills.some(s => s.name === entry && s.scope === 'local');
+        if (alreadyFound) continue;
+        const skill = await readSkillEntry(
+          path.join(localAgentsSkillsDir, entry),
+          entry,
+          'local',
+          'Project Agents Skills',
         );
         if (skill) allSkills.push(skill);
       }
@@ -932,6 +984,20 @@ export async function scanContext(projectPath: string | null, customSources: str
   for (const dir of extraMarkdownDirs) {
     const baseDir = projectPath || dir;
     markdownFiles.push(...await collectMdFilesRecursive(dir, 'local', baseDir));
+  }
+
+  // Surface commands as skills (Claude treats commands as invocable skills in its system prompt)
+  const existingSkillNames = new Set(allSkills.map(s => `${s.scope}:${s.name}`));
+  for (const cmd of allCommands) {
+    const key = `${cmd.scope}:${cmd.name}`;
+    if (existingSkillNames.has(key)) continue; // avoid duplicates
+    allSkills.push({
+      name: cmd.name,
+      scope: cmd.scope,
+      source: `${cmd.source} (command)`,
+      description: cmd.description,
+      filePath: cmd.filePath,
+    });
   }
 
   return {

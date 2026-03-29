@@ -145,7 +145,9 @@ async function main() {
     process.exit(0);
   }
 
-  const context = await scanContext(args.projectPath, args.customSources);
+  // Default to CWD if no project path specified
+  const effectiveProjectPath = args.projectPath ?? process.cwd();
+  const context = await scanContext(effectiveProjectPath, args.customSources);
   const indent = args.pretty ? 2 : undefined;
 
   if (args.section) {
