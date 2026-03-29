@@ -10,11 +10,6 @@ interface TabNavProps {
 
 const tabs = [
   { id: 'overview', label: 'Overview' },
-  { id: 'mcpServers', label: 'MCP Servers' },
-  { id: 'plugins', label: 'Plugins' },
-  { id: 'skills', label: 'Skills' },
-  { id: 'hooks', label: 'Hooks' },
-  { id: 'claudeMd', label: 'CLAUDE.md' },
   { id: 'markdowns', label: 'Markdowns' },
 ];
 

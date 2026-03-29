@@ -6,7 +6,7 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/component
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Eye, EyeOff } from 'lucide-react';
 
 interface SourcesPanelProps {
   sources: ConfigSource[];
@@ -85,8 +85,12 @@ function SourceMenu({ path }: { path: string }) {
 
 export default function SourcesPanel({ sources, onAddSource, onSelectSource }: SourcesPanelProps) {
   const [expanded, setExpanded] = useState(true);
+  const [showInactive, setShowInactive] = useState(false);
   const [showAddInput, setShowAddInput] = useState(false);
   const [newSourcePath, setNewSourcePath] = useState('');
+
+  const activeSources = sources.filter((s) => s.found);
+  const inactiveSources = sources.filter((s) => !s.found);
 
   const handleAddSource = (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,6 +100,29 @@ export default function SourcesPanel({ sources, onAddSource, onSelectSource }: S
       setShowAddInput(false);
     }
   };
+
+  const renderSourceCard = (source: ConfigSource, dimmed?: boolean) => (
+    <div
+      key={source.path}
+      className={`flex items-center gap-2.5 px-3 py-2 rounded-md bg-accent/50 border border-border text-sm ${dimmed ? 'opacity-50' : ''}`}
+    >
+      <button
+        onClick={() => onSelectSource?.(source)}
+        className="flex items-center gap-2.5 flex-1 min-w-0 text-left hover:opacity-80 transition-opacity duration-150 cursor-pointer"
+      >
+        <Badge variant={source.scope as 'global' | 'local' | 'custom'}>
+          {source.scope === 'local' ? 'app' : source.scope}
+        </Badge>
+        <span
+          className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${source.found ? 'bg-green-500' : 'bg-muted-foreground/30'}`}
+        />
+        <span className="text-foreground font-medium truncate flex-1 min-w-0">
+          {source.name}
+        </span>
+      </button>
+      <SourceMenu path={source.path} />
+    </div>
+  );
 
   return (
     <Collapsible open={expanded} onOpenChange={setExpanded} className="bg-card border border-border rounded-lg">
@@ -111,29 +138,26 @@ export default function SourcesPanel({ sources, onAddSource, onSelectSource }: S
       <CollapsibleContent>
         <div className="px-4 pb-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
-            {sources.map((source) => (
-              <div
-                key={source.path}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-md bg-accent/50 border border-border text-sm"
-              >
-                <button
-                  onClick={() => onSelectSource?.(source)}
-                  className="flex items-center gap-2.5 flex-1 min-w-0 text-left hover:opacity-80 transition-opacity duration-150 cursor-pointer"
-                >
-                  <Badge variant={source.scope as 'global' | 'local' | 'custom'}>
-                    {source.scope === 'local' ? 'app' : source.scope}
-                  </Badge>
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${source.found ? 'bg-green-500' : 'bg-muted-foreground/30'}`}
-                  />
-                  <span className="text-foreground font-medium truncate flex-1 min-w-0">
-                    {source.name}
-                  </span>
-                </button>
-                <SourceMenu path={source.path} />
-              </div>
-            ))}
+            {activeSources.map((source) => renderSourceCard(source))}
           </div>
+
+          {inactiveSources.length > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={() => setShowInactive(!showInactive)}
+                className="flex items-center gap-1.5 mt-3 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {showInactive ? <EyeOff size={12} /> : <Eye size={12} />}
+                <span>{showInactive ? 'Hide' : 'Show'} inactive ({inactiveSources.length})</span>
+              </button>
+              {showInactive && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 mt-2">
+                  {inactiveSources.map((source) => renderSourceCard(source, true))}
+                </div>
+              )}
+            </>
+          )}
 
           <div className="mt-3">
             {showAddInput ? (

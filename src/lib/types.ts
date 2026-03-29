@@ -9,6 +9,7 @@ export interface McpServer {
   name: string;
   scope: 'global' | 'local' | 'custom';
   source: string;
+  sourcePath?: string;
   type: string;
   url?: string;
   config: Record<string, unknown>;
@@ -40,8 +41,11 @@ export interface Hook {
   name: string;
   scope: 'global' | 'local' | 'custom';
   source: string;
+  sourcePath?: string;
   type: string;
   command: string;
+  event?: string;
+  matcher?: string;
 }
 
 export interface Command {
