@@ -6,15 +6,11 @@ import ProjectSelector from '@/components/ProjectSelector';
 import SourcesPanel from '@/components/SourcesPanel';
 import TabNav from '@/components/TabNav';
 import OverviewTab from '@/components/OverviewTab';
-import McpServersTab from '@/components/McpServersTab';
-import PluginsTab from '@/components/PluginsTab';
-import SkillsTab from '@/components/SkillsTab';
-import HooksTab from '@/components/HooksTab';
-import ClaudeMdTab from '@/components/ClaudeMdTab';
 import MarkdownsTab from '@/components/MarkdownsTab';
 import DetailPanel from '@/components/DetailPanel';
 import ThemeToggle from '@/components/ThemeToggle';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useMcpAutoConnect } from '@/hooks/useMcpAutoConnect';
 
 export default function Home() {
   const [projects, setProjects] = useState<KnownProject[]>([]);
@@ -28,6 +24,11 @@ export default function Home() {
   const [detailItem, setDetailItem] = useState<Record<string, unknown> | null>(null);
   const [detailType, setDetailType] = useState('');
   const [customSources, setCustomSources] = useState<string[]>([]);
+  const [extraMdDirs, setExtraMdDirs] = useState<string[]>([]);
+  const [skillsModalOpen, setSkillsModalOpen] = useState(false);
+
+  // Auto-connect to all MCP servers and cache results
+  const mcpStatus = useMcpAutoConnect(context?.mcpServers ?? []);
 
   // Fetch known projects on mount
   useEffect(() => {
@@ -38,7 +39,7 @@ export default function Home() {
   }, []);
 
   // Fetch context when project changes
-  const fetchContext = useCallback(async (projectPath: string | null, extraSources: string[] = []) => {
+  const fetchContext = useCallback(async (projectPath: string | null, extraSources: string[] = [], mdDirs: string[] = []) => {
     setLoading(true);
     setError(null);
     try {
@@ -46,6 +47,9 @@ export default function Home() {
       if (projectPath) params.set('project', projectPath);
       for (const src of extraSources) {
         params.append('customSource', src);
+      }
+      for (const dir of mdDirs) {
+        params.append('mdDir', dir);
       }
       const url = `/api/context?${params.toString()}`;
       const res = await fetch(url);
@@ -61,8 +65,8 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    fetchContext(selectedProject, customSources);
-  }, [selectedProject, customSources, fetchContext]);
+    fetchContext(selectedProject, customSources, extraMdDirs);
+  }, [selectedProject, customSources, extraMdDirs, fetchContext]);
 
   const handleAddSource = (sourcePath: string) => {
     if (!customSources.includes(sourcePath)) {
@@ -81,12 +85,9 @@ export default function Home() {
   };
 
   const counts: Record<string, number> = {
-    mcpServers: context?.mcpServers.length ?? 0,
-    plugins: context?.plugins.length ?? 0,
-    skills: context?.skills.length ?? 0,
-    hooks: context?.hooks.length ?? 0,
-    claudeMd: context?.claudeMd ? 1 : 0,
-    markdowns: context?.markdownFiles?.length ?? 0,
+    markdowns: context?.markdownFiles?.filter(
+      (f) => !f.path.includes('/worktree') && !f.relativePath.includes('/worktree')
+    ).length ?? 0,
   };
 
   return (
@@ -109,7 +110,7 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-5">
+      <main className={`mx-auto px-4 sm:px-6 py-6 space-y-5 ${activeTab === 'markdowns' ? 'max-w-[95vw]' : 'max-w-6xl'}`}>
 
         {/* Loading */}
         {loading && (
@@ -160,47 +161,27 @@ export default function Home() {
                   plugins={context.plugins}
                   skills={context.skills}
                   hooks={context.hooks}
+                  commands={context.commands ?? []}
                   onSelectItem={handleSelectItem}
+                  sheetOpen={!!detailItem}
+                  onSkillsModalChange={setSkillsModalOpen}
+                  onCloseSheet={() => setDetailItem(null)}
                 />
-              )}
-
-              {activeTab === 'mcpServers' && (
-                <McpServersTab
-                  servers={context.mcpServers}
-                  onSelectItem={(item) => handleSelectItem('mcpServer', item)}
-                />
-              )}
-
-              {activeTab === 'plugins' && (
-                <PluginsTab
-                  plugins={context.plugins}
-                  onSelectItem={(item) => handleSelectItem('plugin', item)}
-                  onSelectSubItem={(type, name) =>
-                    handleSelectItem(type, { name, type } as Record<string, unknown>)
-                  }
-                />
-              )}
-
-              {activeTab === 'skills' && (
-                <SkillsTab
-                  skills={context.skills}
-                  onSelectItem={(item) => handleSelectItem('skill', item)}
-                />
-              )}
-
-              {activeTab === 'hooks' && (
-                <HooksTab
-                  hooks={context.hooks}
-                  onSelectItem={(item) => handleSelectItem('hook', item)}
-                />
-              )}
-
-              {activeTab === 'claudeMd' && (
-                <ClaudeMdTab content={context.claudeMd} />
               )}
 
               {activeTab === 'markdowns' && (
-                <MarkdownsTab markdownFiles={context.markdownFiles ?? []} />
+                <MarkdownsTab
+                  markdownFiles={context.markdownFiles ?? []}
+                  extraMdDirs={extraMdDirs}
+                  onAddMdDir={(dir) => {
+                    if (!extraMdDirs.includes(dir)) {
+                      setExtraMdDirs((prev) => [...prev, dir]);
+                    }
+                  }}
+                  onRemoveMdDir={(dir) => {
+                    setExtraMdDirs((prev) => prev.filter((d) => d !== dir));
+                  }}
+                />
               )}
             </div>
           </>
@@ -221,6 +202,13 @@ export default function Home() {
         item={detailItem}
         type={detailType}
         onClose={() => setDetailItem(null)}
+        preventOverlayClose={skillsModalOpen}
+        context={context}
+        mcpCapabilitiesCache={mcpStatus.capabilities}
+        onMcpRefresh={(serverName) => {
+          const server = context?.mcpServers.find(s => s.name === serverName);
+          if (server) mcpStatus.refresh(serverName, server);
+        }}
         onNavigate={(navType, navItem) => {
           // Find the full item from context by name and type
           if (!context) return;

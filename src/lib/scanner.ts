@@ -214,17 +214,54 @@ async function scanPluginDir(
     if (skill) skills.push(skill);
   }
 
-  // Scan hooks/
+  // Scan hooks/ — prefer hooks.json for structured event/matcher data
   const hooksDir = path.join(installPath, 'hooks');
-  const hookEntries = await listDir(hooksDir);
-  for (const entry of hookEntries) {
-    hooks.push({
-      name: entry,
-      scope,
-      source: pluginName,
-      type: 'command',
-      command: path.join(hooksDir, entry),
-    });
+  const hooksJsonPath = path.join(hooksDir, 'hooks.json');
+  const hooksJson = await readJsonFile(hooksJsonPath) as Record<string, unknown> | null;
+  if (hooksJson?.hooks && typeof hooksJson.hooks === 'object') {
+    // Structured hooks.json: { hooks: { EventName: [{ matcher, hooks: [{ type, command }] }] } }
+    const eventMap = hooksJson.hooks as Record<string, unknown>;
+    for (const [eventName, matcherGroups] of Object.entries(eventMap)) {
+      if (!Array.isArray(matcherGroups)) continue;
+      for (const group of matcherGroups) {
+        const g = group as Record<string, unknown>;
+        const matcher = (g.matcher as string) ?? '';
+        const innerHooks = Array.isArray(g.hooks) ? g.hooks : [];
+        for (const h of innerHooks) {
+          const hk = h as Record<string, unknown>;
+          const cmd = (hk.command as string) || JSON.stringify(h);
+          // Resolve the actual script path from the command string
+          const scriptMatch = cmd.match(/["']?(\$\{CLAUDE_PLUGIN_ROOT\}\/[^"'\s]+)/);
+          const scriptPath = scriptMatch
+            ? scriptMatch[1].replace('${CLAUDE_PLUGIN_ROOT}', installPath)
+            : undefined;
+          hooks.push({
+            name: eventName,
+            scope,
+            source: pluginName,
+            sourcePath: scriptPath || hooksJsonPath,
+            type: (hk.type as string) || 'command',
+            command: cmd,
+            event: eventName,
+            matcher: matcher || undefined,
+          });
+        }
+      }
+    }
+  } else {
+    // Fallback: list raw files
+    const hookEntries = await listDir(hooksDir);
+    for (const entry of hookEntries) {
+      const hookFilePath = path.join(hooksDir, entry);
+      hooks.push({
+        name: entry,
+        scope,
+        source: pluginName,
+        sourcePath: hookFilePath,
+        type: 'command',
+        command: hookFilePath,
+      });
+    }
   }
 
   // Scan agents/
@@ -266,6 +303,7 @@ async function scanPluginDir(
         name,
         scope,
         source: `Plugin: ${pluginName}`,
+        sourcePath: mcpJsonPath,
         type: (serverCfg.type as string) || (serverCfg.command ? 'stdio' : 'unknown'),
         url: serverCfg.url as string | undefined,
         config: serverCfg,
@@ -283,6 +321,7 @@ async function scanPluginDir(
         name,
         scope,
         source: `Plugin: ${pluginName}`,
+        sourcePath: pkgPath,
         type: (serverCfg.type as string) || (serverCfg.command ? 'stdio' : 'unknown'),
         url: serverCfg.url as string | undefined,
         config: serverCfg,
@@ -293,34 +332,74 @@ async function scanPluginDir(
   return { skills, hooks, agents, commands, mcpServers };
 }
 
+/** Resolve script path from a hook command like `node "${CLAUDE_PLUGIN_ROOT}/hooks/foo.mjs"` */
+function resolveHookScriptPath(command: string, hooksJsonPath?: string): string | undefined {
+  if (!hooksJsonPath) return undefined;
+  // Extract the script filename from the command
+  const scriptMatch = command.match(/\/hooks\/([^"'\s]+\.(?:mjs|js|ts|sh|cmd))/);
+  if (scriptMatch) {
+    const hooksDir = path.dirname(hooksJsonPath);
+    return path.join(hooksDir, scriptMatch[1]);
+  }
+  return undefined;
+}
+
 function extractHooks(
   hooksObj: Record<string, unknown>,
   scope: 'global' | 'local' | 'custom',
   source: string,
+  sourcePath?: string,
 ): Hook[] {
   const hooks: Hook[] = [];
   for (const [eventName, hookDef] of Object.entries(hooksObj)) {
     if (Array.isArray(hookDef)) {
+      // Could be Claude's format: [{ matcher, hooks: [...] }] or flat: [{ type, command }]
       for (const h of hookDef) {
         if (h && typeof h === 'object') {
           const hookItem = h as Record<string, unknown>;
-          hooks.push({
-            name: eventName,
-            scope,
-            source,
-            type: (hookItem.type as string) || 'command',
-            command: (hookItem.command as string) || JSON.stringify(h),
-          });
+          if (Array.isArray(hookItem.hooks)) {
+            // Nested matcher-group format
+            const matcher = (hookItem.matcher as string) ?? '';
+            for (const inner of hookItem.hooks as Record<string, unknown>[]) {
+              const cmd = (inner.command as string) || JSON.stringify(inner);
+              hooks.push({
+                name: eventName,
+                scope,
+                source,
+                sourcePath: resolveHookScriptPath(cmd, sourcePath) || sourcePath,
+                type: (inner.type as string) || 'command',
+                command: cmd,
+                event: eventName,
+                matcher: matcher || undefined,
+              });
+            }
+          } else {
+            const cmd = (hookItem.command as string) || JSON.stringify(h);
+            hooks.push({
+              name: eventName,
+              scope,
+              source,
+              sourcePath: resolveHookScriptPath(cmd, sourcePath) || sourcePath,
+              type: (hookItem.type as string) || 'command',
+              command: cmd,
+              event: eventName,
+              matcher: (hookItem.matcher as string) || undefined,
+            });
+          }
         }
       }
     } else if (hookDef && typeof hookDef === 'object') {
       const hookItem = hookDef as Record<string, unknown>;
+      const cmd = (hookItem.command as string) || JSON.stringify(hookDef);
       hooks.push({
         name: eventName,
         scope,
         source,
+        sourcePath: resolveHookScriptPath(cmd, sourcePath) || sourcePath,
         type: (hookItem.type as string) || 'command',
-        command: (hookItem.command as string) || JSON.stringify(hookDef),
+        command: cmd,
+        event: eventName,
+        matcher: (hookItem.matcher as string) || undefined,
       });
     }
   }
@@ -384,7 +463,12 @@ async function collectMdFilesRecursive(
   return files;
 }
 
-export async function scanContext(projectPath: string | null, customSources: string[] = []): Promise<ProjectContext> {
+/** Convert a project path to the slug format used in ~/.claude/projects/ */
+function projectPathToSlug(projectPath: string): string {
+  return projectPath.replace(/\//g, '-');
+}
+
+export async function scanContext(projectPath: string | null, customSources: string[] = [], extraMarkdownDirs: string[] = []): Promise<ProjectContext> {
   const home = os.homedir();
   const sources: ConfigSource[] = [];
   const mcpServers: McpServer[] = [];
@@ -414,7 +498,7 @@ export async function scanContext(projectPath: string | null, customSources: str
     : null;
 
   if (globalSettings?.hooks && typeof globalSettings.hooks === 'object') {
-    allHooks.push(...extractHooks(globalSettings.hooks as Record<string, unknown>, 'global', 'Global Settings'));
+    allHooks.push(...extractHooks(globalSettings.hooks as Record<string, unknown>, 'global', 'Global Settings', globalSettingsPath));
   }
 
   // 2. Client State (~/.claude.json)
@@ -440,6 +524,7 @@ export async function scanContext(projectPath: string | null, customSources: str
           name,
           scope: 'global',
           source: 'Client State',
+          sourcePath: clientStatePath,
           type: (cfg.type as string) || 'unknown',
           url: cfg.url as string | undefined,
           config: cfg,
@@ -458,6 +543,7 @@ export async function scanContext(projectPath: string | null, customSources: str
             name,
             scope: 'local',
             source: 'Client State (Project)',
+            sourcePath: clientStatePath,
             type: (cfg.type as string) || 'unknown',
             url: cfg.url as string | undefined,
             config: cfg,
@@ -548,6 +634,42 @@ export async function scanContext(projectPath: string | null, customSources: str
     }
   }
 
+  // 3b. Session hooks from temp_git plugin caches
+  // These temp_git_* dirs contain the full merged hooks.json that Claude Code
+  // actually uses at runtime. Scan the most recent one for active session hooks.
+  const pluginCacheDir = path.join(home, '.claude', 'plugins', 'cache');
+  try {
+    const cacheDirs = await fs.readdir(pluginCacheDir);
+    const tempGitDirs = cacheDirs.filter(d => d.startsWith('temp_git_'));
+    if (tempGitDirs.length > 0) {
+      // Sort by timestamp in the name (temp_git_{timestamp}_{id})
+      tempGitDirs.sort((a, b) => {
+        const tsA = parseInt(a.split('_')[2] || '0');
+        const tsB = parseInt(b.split('_')[2] || '0');
+        return tsB - tsA; // most recent first
+      });
+      // Find the most recent temp_git dir that actually has hooks.json
+      for (const dir of tempGitDirs) {
+        const tempDir = path.join(pluginCacheDir, dir);
+        const tempHooksJsonPath = path.join(tempDir, 'hooks', 'hooks.json');
+        const tempHooksJson = await readJsonFile(tempHooksJsonPath) as Record<string, unknown> | null;
+        if (tempHooksJson?.hooks && typeof tempHooksJson.hooks === 'object') {
+          const sessionHooks = extractHooks(tempHooksJson.hooks as Record<string, unknown>, 'global', 'Session Hooks', tempHooksJsonPath);
+          // Only add hooks that aren't already found from installed plugins (deduplicate by command)
+          const existingCommands = new Set(allHooks.map(h => h.command));
+          for (const h of sessionHooks) {
+            if (!existingCommands.has(h.command)) {
+              allHooks.push(h);
+            }
+          }
+          break; // Only use the most recent one
+        }
+      }
+    }
+  } catch {
+    // Cache dir may not exist
+  }
+
   // 4. Global Skills Directory (~/.claude/skills/)
   const skillsDirPath = path.join(home, '.claude', 'skills');
   const skillsDirFound = await fileExists(skillsDirPath);
@@ -609,7 +731,7 @@ export async function scanContext(projectPath: string | null, customSources: str
     if (projectSettingsFound) {
       const projectSettings = await readJsonFile(projectSettingsPath) as Record<string, unknown> | null;
       if (projectSettings?.hooks && typeof projectSettings.hooks === 'object') {
-        allHooks.push(...extractHooks(projectSettings.hooks as Record<string, unknown>, 'local', 'Project Settings'));
+        allHooks.push(...extractHooks(projectSettings.hooks as Record<string, unknown>, 'local', 'Project Settings', projectSettingsPath));
       }
     }
 
@@ -653,6 +775,7 @@ export async function scanContext(projectPath: string | null, customSources: str
             name,
             scope: 'local',
             source: 'MCP Config',
+            sourcePath: mcpConfigPath,
             type: (serverCfg.type as string) || 'unknown',
             url: serverCfg.url as string | undefined,
             config: serverCfg,
@@ -707,6 +830,58 @@ export async function scanContext(projectPath: string | null, customSources: str
       }
     }
 
+    // 10. Shared Project Settings (<project>/.claude/settings.json)
+    const sharedSettingsPath = path.join(projectPath, '.claude', 'settings.json');
+    const sharedSettingsFound = await fileExists(sharedSettingsPath);
+    sources.push({
+      scope: 'local',
+      name: 'Shared Project Settings',
+      path: sharedSettingsPath,
+      found: sharedSettingsFound,
+    });
+
+    if (sharedSettingsFound) {
+      const sharedSettings = await readJsonFile(sharedSettingsPath) as Record<string, unknown> | null;
+      if (sharedSettings?.hooks && typeof sharedSettings.hooks === 'object') {
+        allHooks.push(...extractHooks(sharedSettings.hooks as Record<string, unknown>, 'local', 'Shared Project Settings', sharedSettingsPath));
+      }
+    }
+
+    // 11. User-level project CLAUDE.md (~/.claude/projects/<slug>/CLAUDE.md)
+    const slug = projectPathToSlug(projectPath);
+    const userProjectDir = path.join(home, '.claude', 'projects', slug);
+    const userClaudeMdPath = path.join(userProjectDir, 'CLAUDE.md');
+    const userClaudeMdFound = await fileExists(userClaudeMdPath);
+    sources.push({
+      scope: 'local',
+      name: 'User Project CLAUDE.md',
+      path: userClaudeMdPath,
+      found: userClaudeMdFound,
+    });
+
+    if (userClaudeMdFound && !claudeMd) {
+      try {
+        const rawContent = await fs.readFile(userClaudeMdPath, 'utf-8');
+        claudeMd = await resolveIncludes(rawContent, path.dirname(userClaudeMdPath));
+      } catch {
+        // skip
+      }
+    }
+
+    // 12. Auto-memory (~/.claude/projects/<slug>/memory/)
+    const memoryDir = path.join(userProjectDir, 'memory');
+    const memoryDirFound = await fileExists(memoryDir);
+    sources.push({
+      scope: 'local',
+      name: 'Auto Memory',
+      path: memoryDir,
+      found: memoryDirFound,
+    });
+
+    if (memoryDirFound) {
+      markdownFiles.push(...await collectMdFilesRecursive(memoryDir, 'local', projectPath));
+    }
+
     // Collect local .md files from project root, .claude/, docs/, .skills/
     markdownFiles.push(...await collectMdFiles(projectPath, 'local', projectPath));
     markdownFiles.push(...await collectMdFilesRecursive(path.join(projectPath, '.claude'), 'local', projectPath));
@@ -740,6 +915,7 @@ export async function scanContext(projectPath: string | null, customSources: str
           name,
           scope: 'custom',
           source: sourceLabel,
+          sourcePath: customPath,
           type: (cfg.type as string) || 'unknown',
           url: cfg.url as string | undefined,
           config: cfg,
@@ -748,8 +924,14 @@ export async function scanContext(projectPath: string | null, customSources: str
     }
 
     if (data.hooks && typeof data.hooks === 'object') {
-      allHooks.push(...extractHooks(data.hooks as Record<string, unknown>, 'custom', sourceLabel));
+      allHooks.push(...extractHooks(data.hooks as Record<string, unknown>, 'custom', sourceLabel, customPath));
     }
+  }
+
+  // --- Extra markdown directories ---
+  for (const dir of extraMarkdownDirs) {
+    const baseDir = projectPath || dir;
+    markdownFiles.push(...await collectMdFilesRecursive(dir, 'local', baseDir));
   }
 
   return {

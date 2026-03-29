@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import type { MarkdownFile } from '@/lib/types';
 import MarkdownEditor from './MarkdownEditor';
 import {
@@ -8,11 +9,16 @@ import {
   X,
   PanelLeftClose,
   PanelLeft,
-  Filter,
+  GitBranch,
+  ExternalLink,
+  FolderPlus,
 } from 'lucide-react';
 
 interface MarkdownsTabProps {
   markdownFiles: MarkdownFile[];
+  extraMdDirs: string[];
+  onAddMdDir: (dir: string) => void;
+  onRemoveMdDir: (dir: string) => void;
 }
 
 interface PaneState {
@@ -20,26 +26,93 @@ interface PaneState {
   content: string;
 }
 
-const CLAUDE_FILES = ['CLAUDE.md', 'AGENTS.md', 'GEMINI.md'];
-
-function isClaudeFile(file: MarkdownFile): boolean {
-  return CLAUDE_FILES.includes(file.name) || file.relativePath.startsWith('.claude/');
+/** Check if a file belongs to a worktree based on its path */
+function isWorktreeFile(file: MarkdownFile): boolean {
+  return file.path.includes('/worktree') || file.relativePath.includes('/worktree');
 }
 
-export default function MarkdownsTab({ markdownFiles }: MarkdownsTabProps) {
-  const [filterClaude, setFilterClaude] = useState(false);
+/** Extract the worktree name from a file path (segment after worktree/worktrees) */
+function getWorktreeName(filePath: string): string | null {
+  const parts = filePath.split('/');
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (parts[i] === 'worktrees' || parts[i] === 'worktree') {
+      return parts[i + 1] || null;
+    }
+  }
+  return null;
+}
+
+/** Check if a worktree path is from Conductor */
+function isConductorWorktree(filePath: string): boolean {
+  // Conductor worktrees live under conductor/workspaces paths
+  return filePath.includes('/conductor/');
+}
+
+interface WorktreeInfo {
+  name: string;
+  source: 'conductor' | 'other';
+}
+
+export default function MarkdownsTab({ markdownFiles, extraMdDirs, onAddMdDir, onRemoveMdDir }: MarkdownsTabProps) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const [worktreeEnabled, setWorktreeEnabled] = useState(false);
+  const [selectedWorktree, setSelectedWorktree] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [leftPane, setLeftPane] = useState<PaneState>({ file: null, content: '' });
   const [rightPane, setRightPane] = useState<PaneState>({ file: null, content: '' });
   const [focusedPane, setFocusedPane] = useState<'left' | 'right'>('left');
   const [splitActive, setSplitActive] = useState(false);
+  const restoredFromUrl = useRef(false);
 
-  const filteredFiles = filterClaude
-    ? markdownFiles.filter(isClaudeFile)
-    : markdownFiles;
+  // Extract all worktrees, categorized
+  const worktrees = useMemo(() => {
+    const seen = new Map<string, WorktreeInfo>();
+    for (const f of markdownFiles) {
+      if (!isWorktreeFile(f)) continue;
+      const name = getWorktreeName(f.path);
+      if (name && !seen.has(name)) {
+        seen.set(name, {
+          name,
+          source: isConductorWorktree(f.path) ? 'conductor' : 'other',
+        });
+      }
+    }
+    return Array.from(seen.values());
+  }, [markdownFiles]);
+
+  const conductorWorktrees = worktrees.filter((w) => w.source === 'conductor');
+  const otherWorktrees = worktrees.filter((w) => w.source === 'other');
+  const hasWorktrees = worktrees.length > 0;
+
+  // Filter files
+  const filteredFiles = markdownFiles.filter((f) => {
+    if (!worktreeEnabled) return !isWorktreeFile(f);
+    if (selectedWorktree) {
+      // Show non-worktree files + files from the selected worktree
+      if (!isWorktreeFile(f)) return true;
+      return getWorktreeName(f.path) === selectedWorktree;
+    }
+    return true;
+  });
 
   const globalFiles = filteredFiles.filter((f) => f.scope === 'global');
   const localFiles = filteredFiles.filter((f) => f.scope === 'local');
+
+  const updateUrlParams = useCallback((left: MarkdownFile | null, right: MarkdownFile | null) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (left) {
+      params.set('file', left.relativePath);
+    } else {
+      params.delete('file');
+    }
+    if (right) {
+      params.set('file2', right.relativePath);
+    } else {
+      params.delete('file2');
+    }
+    router.replace(`?${params.toString()}`, { scroll: false });
+  }, [searchParams, router]);
 
   const loadFileContent = useCallback(async (file: MarkdownFile): Promise<string> => {
     try {
@@ -58,36 +131,64 @@ export default function MarkdownsTab({ markdownFiles }: MarkdownsTabProps) {
 
     if (targetPane === 'left') {
       setLeftPane({ file, content });
+      updateUrlParams(file, rightPane.file);
     } else {
       setRightPane({ file, content });
+      updateUrlParams(leftPane.file, file);
     }
-  }, [focusedPane, loadFileContent]);
+  }, [focusedPane, loadFileContent, updateUrlParams, leftPane.file, rightPane.file]);
 
   const openInSplit = useCallback(async (file: MarkdownFile) => {
     const content = await loadFileContent(file);
     setRightPane({ file, content });
     setSplitActive(true);
     setFocusedPane('right');
-  }, [loadFileContent]);
+    updateUrlParams(leftPane.file, file);
+  }, [loadFileContent, updateUrlParams, leftPane.file]);
 
   const closePane = useCallback((pane: 'left' | 'right') => {
     if (pane === 'right') {
       setRightPane({ file: null, content: '' });
       setSplitActive(false);
       setFocusedPane('left');
+      updateUrlParams(leftPane.file, null);
     } else if (splitActive) {
       // Move right to left
       setLeftPane(rightPane);
       setRightPane({ file: null, content: '' });
       setSplitActive(false);
       setFocusedPane('left');
+      updateUrlParams(rightPane.file, null);
     }
-  }, [splitActive, rightPane]);
+  }, [splitActive, rightPane, updateUrlParams, leftPane.file]);
 
-  // Auto-open first file
+  // Restore files from URL params on load, or auto-open first file
   useEffect(() => {
-    if (!leftPane.file && markdownFiles.length > 0) {
-      openFile(markdownFiles[0]);
+    if (restoredFromUrl.current || markdownFiles.length === 0) return;
+    restoredFromUrl.current = true;
+
+    const fileParam = searchParams.get('file');
+    const file2Param = searchParams.get('file2');
+
+    const leftFile = fileParam
+      ? markdownFiles.find((f) => f.relativePath === fileParam)
+      : null;
+    const rightFile = file2Param
+      ? markdownFiles.find((f) => f.relativePath === file2Param)
+      : null;
+
+    if (leftFile) {
+      loadFileContent(leftFile).then((content) => setLeftPane({ file: leftFile, content }));
+    } else if (markdownFiles.length > 0) {
+      const first = markdownFiles[0];
+      loadFileContent(first).then((content) => setLeftPane({ file: first, content }));
+    }
+
+    if (rightFile) {
+      loadFileContent(rightFile).then((content) => {
+        setRightPane({ file: rightFile, content });
+        setSplitActive(true);
+      });
     }
   }, [markdownFiles]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -168,9 +269,23 @@ export default function MarkdownsTab({ markdownFiles }: MarkdownsTabProps) {
         {/* Pane header */}
         <div className="flex items-center gap-2 px-3 py-1.5 bg-secondary/50 border-b border-border">
           <FileText size={13} className={scopeColor} />
-          <span className="text-[12px] font-medium truncate flex-1">
-            {pane.file.relativePath}
-          </span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              // Reveal file in Finder
+              fetch('/api/open', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: pane.file!.path }),
+              });
+            }}
+            className="text-[12px] font-medium truncate flex-1 text-left hover:underline flex items-center gap-1 group"
+            title={`Open in Finder: ${pane.file.path}`}
+          >
+            <span className="truncate">{pane.file.relativePath}</span>
+            <ExternalLink size={11} className="flex-shrink-0 opacity-0 group-hover:opacity-60 transition-opacity" />
+          </button>
           {!splitActive && paneKey === 'left' && (
             <button
               type="button"
@@ -212,7 +327,92 @@ export default function MarkdownsTab({ markdownFiles }: MarkdownsTabProps) {
   }
 
   return (
-    <div className="flex h-[calc(100vh-280px)] min-h-[500px] bg-card border border-border rounded-lg overflow-hidden">
+    <div className="space-y-3">
+      {/* Worktree toggle bar */}
+      {hasWorktrees && (
+        <div className="flex items-center gap-3 bg-card border border-border rounded-lg px-4 py-2.5">
+          <div className="flex items-center gap-2">
+            <GitBranch size={16} className="text-muted-foreground" />
+            <span className="text-sm font-medium text-foreground">Worktrees</span>
+          </div>
+
+          {/* Toggle switch */}
+          <button
+            type="button"
+            onClick={() => {
+              setWorktreeEnabled(!worktreeEnabled);
+              if (worktreeEnabled) setSelectedWorktree(null);
+            }}
+            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+              worktreeEnabled ? 'bg-primary' : 'bg-muted-foreground/30'
+            }`}
+          >
+            <span
+              className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+                worktreeEnabled ? 'translate-x-4' : 'translate-x-1'
+              }`}
+            />
+          </button>
+
+          {/* Worktree picker — visible when toggled on */}
+          {worktreeEnabled && (
+            <div className="flex items-center gap-2 ml-2 flex-wrap">
+              {conductorWorktrees.length > 0 && (
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mr-1">Conductor</span>
+                  {conductorWorktrees.map((w) => (
+                    <button
+                      key={w.name}
+                      type="button"
+                      onClick={() => setSelectedWorktree(selectedWorktree === w.name ? null : w.name)}
+                      className={`text-xs px-2 py-0.5 rounded border transition-colors ${
+                        selectedWorktree === w.name
+                          ? 'bg-primary/15 text-primary border-primary/30'
+                          : 'text-muted-foreground border-border hover:bg-accent hover:text-foreground'
+                      }`}
+                    >
+                      {w.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {otherWorktrees.length > 0 && (
+                <div className="flex items-center gap-1">
+                  {conductorWorktrees.length > 0 && (
+                    <div className="w-px h-4 bg-border mx-1" />
+                  )}
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mr-1">Other</span>
+                  {otherWorktrees.map((w) => (
+                    <button
+                      key={w.name}
+                      type="button"
+                      onClick={() => setSelectedWorktree(selectedWorktree === w.name ? null : w.name)}
+                      className={`text-xs px-2 py-0.5 rounded border transition-colors ${
+                        selectedWorktree === w.name
+                          ? 'bg-primary/15 text-primary border-primary/30'
+                          : 'text-muted-foreground border-border hover:bg-accent hover:text-foreground'
+                      }`}
+                    >
+                      {w.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {selectedWorktree && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedWorktree(null)}
+                  className="text-[10px] text-muted-foreground hover:text-foreground ml-1"
+                >
+                  Show all
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+    <div className="flex h-[calc(100vh-160px)] min-h-[500px] bg-card border border-border rounded-lg overflow-hidden">
       {/* Sidebar */}
       {sidebarOpen && (
         <div className="w-56 flex-shrink-0 border-r border-border flex flex-col bg-card">
@@ -222,19 +422,6 @@ export default function MarkdownsTab({ markdownFiles }: MarkdownsTabProps) {
               Files
             </span>
             <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setFilterClaude(!filterClaude)}
-                className={`text-[9px] px-2 py-0.5 rounded border transition-colors ${
-                  filterClaude
-                    ? 'bg-primary/15 text-primary border-primary/30'
-                    : 'text-muted-foreground border-border hover:bg-accent'
-                }`}
-                title="Filter to Claude files only"
-              >
-                <Filter size={10} className="inline mr-1" />
-                Claude
-              </button>
               <button
                 type="button"
                 onClick={() => setSidebarOpen(false)}
@@ -255,6 +442,33 @@ export default function MarkdownsTab({ markdownFiles }: MarkdownsTabProps) {
                 No .md files found
               </div>
             )}
+          </div>
+
+          {/* Extra directories */}
+          <div className="border-t border-border px-2.5 py-2 space-y-1">
+            {extraMdDirs.map((dir) => (
+              <div key={dir} className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                <span className="truncate flex-1" title={dir}>{dir.split('/').pop()}</span>
+                <button
+                  type="button"
+                  onClick={() => onRemoveMdDir(dir)}
+                  className="hover:text-foreground p-0.5 rounded hover:bg-accent"
+                >
+                  <X size={10} />
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                const dir = prompt('Directory path to scan for .md files:');
+                if (dir?.trim()) onAddMdDir(dir.trim());
+              }}
+              className="w-full flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground px-1 py-1 rounded hover:bg-accent transition-colors"
+            >
+              <FolderPlus size={12} />
+              Add directory
+            </button>
           </div>
         </div>
       )}
@@ -281,6 +495,8 @@ export default function MarkdownsTab({ markdownFiles }: MarkdownsTabProps) {
           </>
         )}
       </div>
+
+    </div>
     </div>
   );
 }
