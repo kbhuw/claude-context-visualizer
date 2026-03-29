@@ -775,12 +775,12 @@ export async function scanContext(projectPath: string | null, customSources: str
     // Cache dir may not exist
   }
 
-  // 4. Global Skills Directory (~/.claude/skills/)
+  // 4. Global Global Skills (~/.claude/skills/)
   const skillsDirPath = path.join(home, '.claude', 'skills');
   const skillsDirFound = await fileExists(skillsDirPath);
   sources.push({
     scope: 'global',
-    name: 'Skills Directory',
+    name: 'Global Skills',
     path: skillsDirPath,
     found: skillsDirFound,
   });
@@ -792,7 +792,7 @@ export async function scanContext(projectPath: string | null, customSources: str
         path.join(skillsDirPath, entry),
         entry,
         'global',
-        'Skills Directory',
+        'Global Skills',
       );
       if (skill) allSkills.push(skill);
     }
@@ -804,20 +804,19 @@ export async function scanContext(projectPath: string | null, customSources: str
   if (globalAgentsSkillsFound) {
     sources.push({
       scope: 'global',
-      name: 'Agents Skills Directory',
+      name: 'Global Agents',
       path: globalAgentsSkillsDir,
       found: true,
     });
     const agentSkillEntries = await listDir(globalAgentsSkillsDir);
     for (const entry of agentSkillEntries) {
-      // Skip if already found via symlink in ~/.claude/skills/
-      const alreadyFound = allSkills.some(s => s.name === entry);
-      if (alreadyFound) continue;
+      // Always show agents skills even if a duplicate exists in ~/.claude/skills/
+      // so users can see the NOT INVOCABLE warning and know to fix it
       const skill = await readSkillEntry(
         path.join(globalAgentsSkillsDir, entry),
         entry,
         'global',
-        'Agents Skills Directory',
+        'Global Agents',
       );
       if (skill) allSkills.push(skill);
     }
@@ -921,7 +920,7 @@ export async function scanContext(projectPath: string | null, customSources: str
     const localSkillsDirFound = await fileExists(localSkillsDir);
     sources.push({
       scope: 'local',
-      name: 'Project Skills',
+      name: 'Local Skills',
       path: localSkillsDir,
       found: localSkillsDirFound,
     });
@@ -933,7 +932,7 @@ export async function scanContext(projectPath: string | null, customSources: str
           path.join(localSkillsDir, entry),
           entry,
           'local',
-          'Project Skills',
+          'Local Skills',
         );
         if (skill) allSkills.push(skill);
       }
@@ -945,20 +944,17 @@ export async function scanContext(projectPath: string | null, customSources: str
     if (localAgentsSkillsDirFound) {
       sources.push({
         scope: 'local',
-        name: 'Project Agents Skills',
+        name: 'Local Agents',
         path: localAgentsSkillsDir,
         found: true,
       });
       const entries = await listDir(localAgentsSkillsDir);
       for (const entry of entries) {
-        // Skip if already found via symlink in .claude/skills/
-        const alreadyFound = allSkills.some(s => s.name === entry && s.scope === 'local');
-        if (alreadyFound) continue;
         const skill = await readSkillEntry(
           path.join(localAgentsSkillsDir, entry),
           entry,
           'local',
-          'Project Agents Skills',
+          'Local Agents',
         );
         if (skill) allSkills.push(skill);
       }
@@ -969,7 +965,7 @@ export async function scanContext(projectPath: string | null, customSources: str
     const localCommandsDirFound = await fileExists(localCommandsDir);
     sources.push({
       scope: 'local',
-      name: 'Project Commands',
+      name: 'Local Commands',
       path: localCommandsDir,
       found: localCommandsDirFound,
     });
@@ -981,7 +977,7 @@ export async function scanContext(projectPath: string | null, customSources: str
           path.join(localCommandsDir, entry),
           entry,
           'local',
-          'Project Commands',
+          'Local Commands',
         );
         allCommands.push(...cmds);
       }
@@ -1119,15 +1115,16 @@ export async function scanContext(projectPath: string | null, customSources: str
     });
   }
 
-  // Extract built-in skills from the Claude Code binary
-  const claudeBinary = await findClaudeBinary();
-  if (claudeBinary) {
-    const builtinSkills = await extractBuiltinSkills(claudeBinary);
-    const allSkillNames = new Set(allSkills.map(s => s.name));
-    for (const skill of builtinSkills) {
-      if (!allSkillNames.has(skill.name)) {
-        allSkills.push(skill);
-      }
+  // NOTE: Built-in skills (extracted from Claude binary) are intentionally excluded.
+  // They cannot be invoked via the Skill tool and showing them is misleading.
+
+  // Mark skills in Global Skills / Local Skills that also exist in agents directories
+  const agentSkillNames = new Set(
+    allSkills.filter(s => s.source === 'Global Agents' || s.source === 'Local Agents').map(s => s.name)
+  );
+  for (const skill of allSkills) {
+    if ((skill.source === 'Global Skills' || skill.source === 'Local Skills') && agentSkillNames.has(skill.name)) {
+      skill.alsoInAgents = true;
     }
   }
 

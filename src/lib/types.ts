@@ -38,6 +38,7 @@ export interface Skill {
   size?: number; // total size in bytes of the skill directory or file
   lines?: number; // total lines of code across all files
   tokens?: number; // estimated token count (~1 token per 4 chars)
+  alsoInAgents?: boolean; // true if this skill also exists in ~/.agents/skills/ (which is not read by Claude Code)
 }
 
 export interface Hook {
