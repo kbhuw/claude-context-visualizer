@@ -552,6 +552,38 @@ function HooksCard({
   );
 }
 
+type ScopeFilter = 'all' | 'global' | 'local';
+
+function ScopeFilterBar({ value, onChange }: { value: ScopeFilter; onChange: (v: ScopeFilter) => void }) {
+  const options: { value: ScopeFilter; label: string }[] = [
+    { value: 'all', label: 'All' },
+    { value: 'global', label: 'Global' },
+    { value: 'local', label: 'Local' },
+  ];
+  return (
+    <div className="flex items-center gap-0.5 bg-muted rounded-md p-0.5">
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          onClick={() => onChange(opt.value)}
+          className={`text-xs px-2.5 py-1 rounded font-medium transition-colors ${
+            value === opt.value
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function filterByScope<T extends { scope: string }>(items: T[], filter: ScopeFilter): T[] {
+  if (filter === 'all') return items;
+  return items.filter((item) => item.scope === filter);
+}
+
 export default function OverviewTab({
   mcpServers,
   plugins,
@@ -563,37 +595,50 @@ export default function OverviewTab({
   onSkillsModalChange,
   onCloseSheet,
 }: OverviewTabProps & { sheetOpen?: boolean; onSkillsModalChange?: (open: boolean) => void; onCloseSheet?: () => void }) {
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('all');
+
+  const filteredServers = useMemo(() => filterByScope(mcpServers, scopeFilter), [mcpServers, scopeFilter]);
+  const filteredPlugins = useMemo(() => filterByScope(plugins, scopeFilter), [plugins, scopeFilter]);
+  const filteredSkills = useMemo(() => filterByScope(skills, scopeFilter), [skills, scopeFilter]);
+  const filteredHooks = useMemo(() => filterByScope(hooks, scopeFilter), [hooks, scopeFilter]);
+  const filteredCommands = useMemo(() => filterByScope(commands, scopeFilter), [commands, scopeFilter]);
+
   const sections: CardSection[] = [
     {
       title: 'MCP Servers',
       color: 'blue',
       dotColor: 'bg-blue-500',
       type: 'mcpServer',
-      items: mcpServers.map((s) => ({ name: s.name, scope: s.scope, source: s.source, raw: s as unknown as Record<string, unknown> })),
+      items: filteredServers.map((s) => ({ name: s.name, scope: s.scope, source: s.source, raw: s as unknown as Record<string, unknown> })),
     },
     {
       title: 'Plugins',
       color: 'purple',
       dotColor: 'bg-purple-500',
       type: 'plugin',
-      items: plugins.map((p) => ({ name: p.name, scope: p.scope, source: p.source, raw: p as unknown as Record<string, unknown> })),
+      items: filteredPlugins.map((p) => ({ name: p.name, scope: p.scope, source: p.source, raw: p as unknown as Record<string, unknown> })),
     },
     {
       title: 'Commands',
       color: 'teal',
       dotColor: 'bg-teal-500',
       type: 'command',
-      items: commands.map((c) => ({ name: c.name, scope: c.scope, source: c.source, raw: c as unknown as Record<string, unknown> })),
+      items: filteredCommands.map((c) => ({ name: c.name, scope: c.scope, source: c.source, raw: c as unknown as Record<string, unknown> })),
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {sections.map((section) => (
-        <OverviewCard key={section.title} section={section} onSelectItem={onSelectItem} />
-      ))}
-      <HooksCard hooks={hooks} onSelectItem={onSelectItem} />
-      <SkillsCard skills={skills} onSelectItem={onSelectItem} sheetOpen={!!sheetOpen} onModalChange={onSkillsModalChange} onCloseSheet={onCloseSheet} />
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <ScopeFilterBar value={scopeFilter} onChange={setScopeFilter} />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {sections.map((section) => (
+          <OverviewCard key={section.title} section={section} onSelectItem={onSelectItem} />
+        ))}
+        <HooksCard hooks={filteredHooks} onSelectItem={onSelectItem} />
+        <SkillsCard skills={filteredSkills} onSelectItem={onSelectItem} sheetOpen={!!sheetOpen} onModalChange={onSkillsModalChange} onCloseSheet={onCloseSheet} />
+      </div>
     </div>
   );
 }

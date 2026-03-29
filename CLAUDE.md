@@ -55,6 +55,60 @@ The app is designed to work with the Conductor workflow manager. Conductor organ
 
 **Project selector UI** (`ProjectSelector.tsx`): Card-based picker with color-coded cards per conductor project. Clicking a project card expands a list showing the main repo and worktrees. Global View and Other (file picker) are separate cards. The app defaults to `~/conductor` on load.
 
+## CLI & API Reference
+
+Full documentation in `plot.md` and the `context-visualizer` skill (`.claude/skills/context-visualizer/SKILL.md`, also symlinked to `~/.claude/skills/`).
+
+### CLI
+
+```bash
+# Scanning
+bun run scan <path>                  # Full context JSON for a project
+bun run scan <path> -s skills        # Just skills
+bun run scan <path> -s hooks         # Just hooks
+bun run scan <path> -s mcpServers    # Just MCP servers
+bun run scan <path> -s plugins       # Just plugins
+bun run scan <path> -s commands      # Just commands
+bun run scan <path> -s claudeMd      # Resolved CLAUDE.md with @includes
+bun run scan <path> -s markdowns     # All discovered .md files
+bun run scan <path> -s sources       # All config source paths + found status
+bun run scan <path> -s summary       # Quick counts (includes markdown count)
+
+# Project discovery
+bun run scan --list-projects         # Known Claude projects from ~/.claude.json
+bun run scan --conductor-projects    # Conductor repos, worktrees, main repo paths
+
+# File reading
+bun run scan --read-file <path>      # Read any file (JSON secrets masked)
+
+# MCP introspection (unified)
+bun run scan --introspect --all -p <path>          # Introspect all MCP servers
+bun run scan --introspect --server <name> -p <path> # Introspect one server
+```
+
+### API (dev server at :3000)
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/api/projects` | All projects, conductor repos/worktrees, conductor dir |
+| GET | `/api/context?project=<path>` | Full scan (sources, MCP, plugins, skills, hooks, commands, CLAUDE.md, markdowns) |
+| GET | `/api/file?path=<path>` | Read any file (JSON secrets masked) |
+| POST | `/api/file` | Write .md files |
+| POST | `/api/mcp-introspect` | Live MCP server introspection (tools, resources, prompts) |
+| POST | `/api/browse` | macOS folder picker |
+
+### What the scanner extracts
+
+For any project path, the scanner discovers and returns:
+- **Sources**: 14 config file locations checked (global settings, client state, plugins, skills dirs, project settings, CLAUDE.md, .mcp.json, commands, shared settings, user project CLAUDE.md, auto-memory)
+- **MCP Servers**: from ~/.claude.json (global + per-project), .mcp.json, plugin configs
+- **Plugins**: name, version, install path, marketplace, and all sub-resources (skills, hooks, agents, commands, MCP servers)
+- **Skills**: from plugins, ~/.claude/skills/, ~/.agents/skills/, project skills dirs, commands-as-skills, built-in skills (extracted from Claude binary)
+- **Hooks**: from global/local/shared settings, plugin hooks.json, session cache hooks — with event, command, matcher, resolved script paths
+- **Commands**: from ~/.claude/commands/ and project commands dirs, with YAML frontmatter metadata
+- **CLAUDE.md**: fully resolved with @include directives expanded (recursive, 5 levels deep)
+- **Markdown files**: all .md files from ~/.claude/, project root, .claude/, docs/, .skills/, auto-memory
+
 ## Conventions
 
 - UI components use shadcn/ui patterns with Radix primitives
