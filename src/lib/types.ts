@@ -35,6 +35,9 @@ export interface Skill {
   source: string;
   description?: string;
   filePath: string;
+  size?: number; // total size in bytes of the skill directory or file
+  lines?: number; // total lines of code across all files
+  tokens?: number; // estimated token count (~1 token per 4 chars)
 }
 
 export interface Hook {
