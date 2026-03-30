@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { ExternalLink, X, ChevronRight, FileText, Plug, AlertCircle, Copy, FolderOpen, Check, MoreVertical } from 'lucide-react';
+import { ExternalLink, X, ChevronRight, FileText, Plug, AlertCircle, Copy, FolderOpen, Check, MoreVertical, Trash2 } from 'lucide-react';
 import type { ProjectContext } from '@/lib/types';
 
 interface McpTool {
@@ -41,6 +41,7 @@ interface DetailPanelProps {
   mcpCapabilitiesCache?: Record<string, McpCapabilities>;
   onMcpRefresh?: (serverName: string) => void;
   preventOverlayClose?: boolean;
+  onItemRemove?: (type: string, name: string) => void;
 }
 
 function estimateTokens(text: string): number {
@@ -124,7 +125,7 @@ function DetailMenu({ filePath, onCopyPath, copiedPath }: {
   );
 }
 
-export default function DetailPanel({ item, type, onClose, onNavigate, context, mcpCapabilitiesCache, onMcpRefresh, preventOverlayClose }: DetailPanelProps) {
+export default function DetailPanel({ item, type, onClose, onNavigate, context, mcpCapabilitiesCache, onMcpRefresh, preventOverlayClose, onItemRemove }: DetailPanelProps) {
   const [fileContent, setFileContent] = useState<string | null>(null);
   const [loadingFile, setLoadingFile] = useState(false);
   const [showRawConfig, setShowRawConfig] = useState(false);
@@ -134,6 +135,22 @@ export default function DetailPanel({ item, type, onClose, onNavigate, context, 
   const [expandedContribution, setExpandedContribution] = useState<string | null>(null);
   const [expandedContribTool, setExpandedContribTool] = useState<string | null>(null);
   const [copiedPath, setCopiedPath] = useState(false);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
+  const [removing, setRemoving] = useState(false);
+
+  // Prevent Escape from closing the Sheet when the confirmation dialog is open
+  useEffect(() => {
+    if (!confirmingRemove) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        e.preventDefault();
+        if (!removing) setConfirmingRemove(false);
+      }
+    };
+    document.addEventListener('keydown', handler, true);
+    return () => document.removeEventListener('keydown', handler, true);
+  }, [confirmingRemove, removing]);
 
   useEffect(() => {
     if (!item) {
@@ -145,6 +162,8 @@ export default function DetailPanel({ item, type, onClose, onNavigate, context, 
       setExpandedContribution(null);
       setExpandedContribTool(null);
       setCopiedPath(false);
+      setConfirmingRemove(false);
+      setRemoving(false);
       return;
     }
 
@@ -313,8 +332,53 @@ export default function DetailPanel({ item, type, onClose, onNavigate, context, 
     (item?.sourcePath as string) ||
     '';
 
+  // Determine if this item can be removed
+  const source = (item?.source as string) || '';
+  const isRemovable = onItemRemove && (() => {
+    // Plugin-contributed items can't be removed individually
+    if (source.toLowerCase().includes('plugin:') || source === 'Plugin') return false;
+    // Built-in skills can't be removed
+    if (type === 'skill' && source === 'built-in') return false;
+    // Session hooks can't be removed
+    if (type === 'hook' && source.toLowerCase().includes('session')) return false;
+    // Source items aren't removable
+    if (type === 'source') return false;
+    // Supported types
+    return ['plugin', 'mcpServer', 'skill', 'hook', 'command'].includes(type);
+  })();
+
+  const handleRemove = async () => {
+    if (!item || !onItemRemove) return;
+    setRemoving(true);
+    try {
+      const body: Record<string, string> = { type, name };
+      if (type === 'mcpServer') {
+        body.sourcePath = (item.sourcePath as string) || '';
+      } else if (type === 'skill' || type === 'command') {
+        body.filePath = (item.filePath as string) || '';
+      } else if (type === 'hook') {
+        body.event = (item.event as string) || (item.name as string) || '';
+        body.command = (item.command as string) || '';
+        body.sourcePath = (item.sourcePath as string) || '';
+      }
+      const res = await fetch('/api/remove', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        setConfirmingRemove(false);
+        onClose();
+        onItemRemove(type, name);
+      }
+    } finally {
+      setRemoving(false);
+    }
+  };
+
   return (
-    <Sheet open={item !== null} onOpenChange={(open) => { if (!open) onClose(); }}>
+    <>
+    <Sheet open={item !== null} onOpenChange={(open) => { if (!open && !confirmingRemove) onClose(); }}>
       <SheetContent side="right" preventOverlayClose={preventOverlayClose}>
         <SheetHeader>
           <div className="flex items-center gap-3 min-w-0">
@@ -362,6 +426,17 @@ export default function DetailPanel({ item, type, onClose, onNavigate, context, 
                   copiedPath={copiedPath}
                 />
               </>
+            )}
+            {isRemovable && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirmingRemove(true)}
+                className="gap-1.5 h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950 border-red-200 dark:border-red-800"
+              >
+                <Trash2 className="w-3 h-3" />
+                Remove
+              </Button>
             )}
           </div>
         </SheetHeader>
@@ -863,5 +938,44 @@ export default function DetailPanel({ item, type, onClose, onNavigate, context, 
         </div>
       </SheetContent>
     </Sheet>
+
+    {/* Removal confirmation dialog */}
+    {confirmingRemove && (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ pointerEvents: 'auto' }} onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+        <div className="absolute inset-0 bg-black/50" onClick={() => !removing && setConfirmingRemove(false)} />
+        <div className="relative z-[101] bg-background border border-border rounded-lg shadow-xl p-6 max-w-sm w-full mx-4 space-y-4" style={{ pointerEvents: 'auto' }}>
+          <div className="space-y-2">
+            <h3 className="text-base font-semibold text-foreground">Remove {type === 'mcpServer' ? 'MCP server' : type}</h3>
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to remove <span className="font-semibold text-foreground">{name}</span>?{' '}
+              {type === 'plugin' && 'This will uninstall the plugin from Claude Code.'}
+              {type === 'skill' && 'This will delete the skill file(s).'}
+              {type === 'command' && 'This will delete the command file(s).'}
+              {type === 'hook' && 'This will remove the hook from its settings file.'}
+              {type === 'mcpServer' && 'This will remove the server from its config file.'}
+            </p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirmingRemove(false)}
+              disabled={removing}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={removing}
+              onClick={handleRemove}
+            >
+              {removing ? 'Removing...' : 'Remove'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

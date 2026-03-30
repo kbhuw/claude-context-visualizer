@@ -219,6 +219,9 @@ export default function Home() {
           const server = context?.mcpServers.find(s => s.name === serverName);
           if (server) mcpStatus.refresh(serverName, server);
         }}
+        onItemRemove={() => {
+          fetchContext(selectedProject, customSources, extraMdDirs);
+        }}
         onNavigate={(navType, navItem) => {
           // Find the full item from context by name and type
           if (!context) return;
