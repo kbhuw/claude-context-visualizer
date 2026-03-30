@@ -8,9 +8,12 @@ interface SkillsTabProps {
 }
 
 export default function SkillsTab({ skills, onSelectItem }: SkillsTabProps) {
+  const nonPluginSources = new Set(['Global Skills', 'Local Skills', 'Global Agents', 'Local Agents', 'Built-in']);
+  const isPluginSkill = (s: Skill) => !nonPluginSources.has(s.source) && !s.source.endsWith('(command)');
   const sourceOrder = (s: Skill) => s.source === 'Global Skills' || s.source === 'Local Skills' ? 0 : s.source === 'Global Agents' || s.source === 'Local Agents' ? 99 : 50;
-  const globalSkills = skills.filter((s) => s.scope === 'global').sort((a, b) => sourceOrder(a) - sourceOrder(b));
-  const localSkills = skills.filter((s) => s.scope === 'local').sort((a, b) => sourceOrder(a) - sourceOrder(b));
+  const globalSkills = skills.filter((s) => s.scope === 'global' && !isPluginSkill(s)).sort((a, b) => sourceOrder(a) - sourceOrder(b));
+  const localSkills = skills.filter((s) => s.scope === 'local' && !isPluginSkill(s)).sort((a, b) => sourceOrder(a) - sourceOrder(b));
+  const pluginSkills = skills.filter(isPluginSkill).sort((a, b) => a.source.localeCompare(b.source) || a.name.localeCompare(b.name));
 
   const renderGroup = (items: Skill[], label: string, labelColor: string) => {
     if (items.length === 0) return null;
@@ -91,6 +94,7 @@ export default function SkillsTab({ skills, onSelectItem }: SkillsTabProps) {
     <div className="space-y-6">
       {renderGroup(globalSkills, 'Global', 'text-blue-500')}
       {renderGroup(localSkills, 'App Level', 'text-green-500')}
+      {renderGroup(pluginSkills, 'Skills from Plugins', 'text-purple-500')}
     </div>
   );
 }

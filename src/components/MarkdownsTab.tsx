@@ -19,6 +19,8 @@ interface MarkdownsTabProps {
   extraMdDirs: string[];
   onAddMdDir: (dir: string) => void;
   onRemoveMdDir: (dir: string) => void;
+  openFilePath?: string | null;
+  onOpenFileHandled?: () => void;
 }
 
 interface PaneState {
@@ -53,7 +55,7 @@ interface WorktreeInfo {
   source: 'conductor' | 'other';
 }
 
-export default function MarkdownsTab({ markdownFiles, extraMdDirs, onAddMdDir, onRemoveMdDir }: MarkdownsTabProps) {
+export default function MarkdownsTab({ markdownFiles, extraMdDirs, onAddMdDir, onRemoveMdDir, openFilePath, onOpenFileHandled }: MarkdownsTabProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [worktreeEnabled, setWorktreeEnabled] = useState(false);
@@ -191,6 +193,33 @@ export default function MarkdownsTab({ markdownFiles, extraMdDirs, onAddMdDir, o
       });
     }
   }, [markdownFiles]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Open a file by path (triggered from external navigation, e.g. edit skill button)
+  useEffect(() => {
+    if (!openFilePath) return;
+    const file = markdownFiles.find((f) => f.path === openFilePath);
+    if (file) {
+      loadFileContent(file).then((content) => {
+        setLeftPane({ file, content });
+        setFocusedPane('left');
+        updateUrlParams(file, rightPane.file);
+      });
+    } else {
+      // File not in the sidebar list — create a temporary MarkdownFile entry and open it
+      const name = openFilePath.split('/').pop() || openFilePath;
+      const tempFile: MarkdownFile = {
+        path: openFilePath,
+        name,
+        scope: openFilePath.includes('/.claude/') && !openFilePath.includes('/projects/') ? 'global' : 'local',
+        relativePath: name,
+      };
+      loadFileContent(tempFile).then((content) => {
+        setLeftPane({ file: tempFile, content });
+        setFocusedPane('left');
+      });
+    }
+    onOpenFileHandled?.();
+  }, [openFilePath]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function FileListItem({ file, isActive }: { file: MarkdownFile; isActive: boolean }) {
     return (

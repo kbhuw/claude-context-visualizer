@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { ExternalLink, X, ChevronRight, FileText, Plug, AlertCircle, Copy, FolderOpen, Check, MoreVertical, Trash2 } from 'lucide-react';
+import { ExternalLink, X, ChevronRight, FileText, Plug, AlertCircle, Copy, FolderOpen, Check, MoreVertical, Trash2, Pencil } from 'lucide-react';
 import type { ProjectContext } from '@/lib/types';
 
 interface McpTool {
@@ -42,6 +42,7 @@ interface DetailPanelProps {
   onMcpRefresh?: (serverName: string) => void;
   preventOverlayClose?: boolean;
   onItemRemove?: (type: string, name: string) => void;
+  onEditSkill?: (filePath: string) => void;
 }
 
 function estimateTokens(text: string): number {
@@ -125,7 +126,7 @@ function DetailMenu({ filePath, onCopyPath, copiedPath }: {
   );
 }
 
-export default function DetailPanel({ item, type, onClose, onNavigate, context, mcpCapabilitiesCache, onMcpRefresh, preventOverlayClose, onItemRemove }: DetailPanelProps) {
+export default function DetailPanel({ item, type, onClose, onNavigate, context, mcpCapabilitiesCache, onMcpRefresh, preventOverlayClose, onItemRemove, onEditSkill }: DetailPanelProps) {
   const [fileContent, setFileContent] = useState<string | null>(null);
   const [loadingFile, setLoadingFile] = useState(false);
   const [showRawConfig, setShowRawConfig] = useState(false);
@@ -419,6 +420,12 @@ export default function DetailPanel({ item, type, onClose, onNavigate, context, 
           <div className="flex items-center gap-1 flex-shrink-0">
             {filePath && (
               <>
+                {type === 'skill' && source !== 'Built-in' && onEditSkill && (
+                  <Button variant="outline" size="sm" onClick={() => { onEditSkill(filePath); onClose(); }} className="gap-1.5 h-7 text-xs">
+                    <Pencil className="w-3 h-3" />
+                    Edit
+                  </Button>
+                )}
                 <Button variant="outline" size="sm" onClick={handleOpenInFinder} className="gap-1.5 h-7 text-xs">
                   <FolderOpen className="w-3 h-3" />
                   Open in Finder

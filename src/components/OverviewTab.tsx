@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { McpServer, Plugin, Skill, Hook } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
-import { ChevronDown, ChevronRight, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, X, Pencil } from 'lucide-react';
 
 interface OverviewTabProps {
   mcpServers: McpServer[];
@@ -12,6 +12,7 @@ interface OverviewTabProps {
   hooks: Hook[];
   commands: { name: string; scope: 'global' | 'local'; source: string; description?: string; filePath: string }[];
   onSelectItem: (type: string, item: Record<string, unknown>) => void;
+  onEditSkill?: (filePath: string) => void;
 }
 
 const sourceColors: Record<string, string> = {
@@ -140,12 +141,14 @@ function SkillGroup({
   defaultExpanded,
   metric,
   onSelectItem,
+  onEditSkill,
 }: {
   groupName: string;
   skills: Skill[];
   defaultExpanded: boolean;
   metric: SizeMetric;
   onSelectItem: (type: string, item: Record<string, unknown>) => void;
+  onEditSkill?: (filePath: string) => void;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
 
@@ -183,10 +186,13 @@ function SkillGroup({
           {skills.map((skill, i) => {
             const plugin = isPluginSkill(skill);
             return (
-              <button
+              <div
                 key={`${skill.name}-${i}`}
+                role="button"
+                tabIndex={0}
                 onClick={() => onSelectItem('skill', skill as unknown as Record<string, unknown>)}
-                className="w-full flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-md hover:bg-accent transition-colors duration-150 text-left"
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelectItem('skill', skill as unknown as Record<string, unknown>); }}
+                className="w-full flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-md hover:bg-accent transition-colors duration-150 text-left cursor-pointer"
               >
                 <span className={`truncate ${
                   isAgentSkill(skill) ? 'text-red-600 dark:text-red-400'
@@ -206,6 +212,19 @@ function SkillGroup({
                     const val = getMetricValue(skill, metric);
                     return val ? <span className="text-[10px] font-mono text-muted-foreground">{val}</span> : null;
                   })()}
+                  {onEditSkill && skill.filePath && skill.source !== 'Built-in' && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEditSkill(skill.filePath);
+                      }}
+                      className="p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
+                      title="Edit skill"
+                    >
+                      <Pencil size={12} />
+                    </button>
+                  )}
                   <Badge className={`${
                     isAgentSkill(skill)
                       ? 'bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400'
@@ -216,7 +235,7 @@ function SkillGroup({
                     {isAgentSkill(skill) ? '⚠ agents' : skill.scope === 'local' ? 'app' : 'global'}
                   </Badge>
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
@@ -233,6 +252,7 @@ function SkillsBrowseModal({
   onCloseSheet,
   skills,
   onSelectItem,
+  onEditSkill,
 }: {
   open: boolean;
   onClose: () => void;
@@ -240,6 +260,7 @@ function SkillsBrowseModal({
   onCloseSheet?: () => void;
   skills: Skill[];
   onSelectItem: (type: string, item: Record<string, unknown>) => void;
+  onEditSkill?: (filePath: string) => void;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
   const [metric, setMetric] = useState<SizeMetric>('off');
@@ -317,6 +338,7 @@ function SkillsBrowseModal({
               defaultExpanded={true}
               metric={metric}
               onSelectItem={onSelectItem}
+              onEditSkill={onEditSkill}
             />
           ))}
         </div>
@@ -332,12 +354,14 @@ function SkillsCard({
   sheetOpen,
   onModalChange,
   onCloseSheet,
+  onEditSkill,
 }: {
   skills: Skill[];
   onSelectItem: (type: string, item: Record<string, unknown>) => void;
   sheetOpen: boolean;
   onModalChange?: (open: boolean) => void;
   onCloseSheet?: () => void;
+  onEditSkill?: (filePath: string) => void;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [metric, setMetric] = useState<SizeMetric>('off');
@@ -377,6 +401,7 @@ function SkillsCard({
               defaultExpanded={false}
               metric={metric}
               onSelectItem={onSelectItem}
+              onEditSkill={onEditSkill}
             />
           ))}
           {skills.length === 0 && (
@@ -392,6 +417,7 @@ function SkillsCard({
         onCloseSheet={onCloseSheet}
         skills={skills}
         onSelectItem={handleModalSelectItem}
+        onEditSkill={onEditSkill}
       />
     </>
   );
@@ -658,7 +684,8 @@ export default function OverviewTab({
   sheetOpen,
   onSkillsModalChange,
   onCloseSheet,
-}: OverviewTabProps & { sheetOpen?: boolean; onSkillsModalChange?: (open: boolean) => void; onCloseSheet?: () => void }) {
+  onEditSkill,
+}: OverviewTabProps & { sheetOpen?: boolean; onSkillsModalChange?: (open: boolean) => void; onCloseSheet?: () => void; onEditSkill?: (filePath: string) => void }) {
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('all');
 
   const filteredServers = useMemo(() => filterByScope(mcpServers, scopeFilter), [mcpServers, scopeFilter]);
@@ -702,7 +729,7 @@ export default function OverviewTab({
         ))}
         <HooksCard hooks={filteredHooks} onSelectItem={onSelectItem} />
       </div>
-      <SkillsCard skills={filteredSkills} onSelectItem={onSelectItem} sheetOpen={!!sheetOpen} onModalChange={onSkillsModalChange} onCloseSheet={onCloseSheet} />
+      <SkillsCard skills={filteredSkills} onSelectItem={onSelectItem} sheetOpen={!!sheetOpen} onModalChange={onSkillsModalChange} onCloseSheet={onCloseSheet} onEditSkill={onEditSkill} />
     </div>
   );
 }

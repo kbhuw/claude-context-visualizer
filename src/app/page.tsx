@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import type { KnownProject, ConductorProject, ProjectContext, ConfigSource } from '@/lib/types';
 import ProjectSelector from '@/components/ProjectSelector';
 import SourcesPanel from '@/components/SourcesPanel';
@@ -28,6 +28,7 @@ export default function Home() {
   const [customSources, setCustomSources] = useState<string[]>([]);
   const [extraMdDirs, setExtraMdDirs] = useState<string[]>([]);
   const [skillsModalOpen, setSkillsModalOpen] = useState(false);
+  const [pendingEditFile, setPendingEditFile] = useState<string | null>(null);
 
   // Auto-connect to all MCP servers and cache results
   const mcpStatus = useMcpAutoConnect(context?.mcpServers ?? []);
@@ -92,6 +93,27 @@ export default function Home() {
     setDetailType(type);
     setDetailItem(item);
   };
+
+  const handleEditSkill = useCallback((filePath: string) => {
+    setPendingEditFile(filePath);
+    setActiveTab('markdowns');
+    setDetailItem(null);
+  }, []);
+
+  // Merge skill .md files into the markdowns list so they appear in the sidebar
+  const markdownFilesWithSkills = useMemo(() => {
+    const base = context?.markdownFiles ?? [];
+    const existingPaths = new Set(base.map((f) => f.path));
+    const skillFiles = (context?.skills ?? [])
+      .filter((s) => s.filePath && s.filePath.endsWith('.md') && s.source !== 'Built-in' && !existingPaths.has(s.filePath))
+      .map((s) => ({
+        path: s.filePath,
+        name: s.filePath.split('/').pop() || s.name,
+        scope: s.scope === 'local' ? 'local' as const : 'global' as const,
+        relativePath: `skills/${s.name}`,
+      }));
+    return [...base, ...skillFiles];
+  }, [context?.markdownFiles, context?.skills]);
 
   const counts: Record<string, number> = {
     markdowns: context?.markdownFiles?.filter(
@@ -176,12 +198,13 @@ export default function Home() {
                   sheetOpen={!!detailItem}
                   onSkillsModalChange={setSkillsModalOpen}
                   onCloseSheet={() => setDetailItem(null)}
+                  onEditSkill={handleEditSkill}
                 />
               )}
 
               {activeTab === 'markdowns' && (
                 <MarkdownsTab
-                  markdownFiles={context.markdownFiles ?? []}
+                  markdownFiles={markdownFilesWithSkills}
                   extraMdDirs={extraMdDirs}
                   onAddMdDir={(dir) => {
                     if (!extraMdDirs.includes(dir)) {
@@ -191,6 +214,8 @@ export default function Home() {
                   onRemoveMdDir={(dir) => {
                     setExtraMdDirs((prev) => prev.filter((d) => d !== dir));
                   }}
+                  openFilePath={pendingEditFile}
+                  onOpenFileHandled={() => setPendingEditFile(null)}
                 />
               )}
             </div>
@@ -222,6 +247,7 @@ export default function Home() {
         onItemRemove={() => {
           fetchContext(selectedProject, customSources, extraMdDirs);
         }}
+        onEditSkill={handleEditSkill}
         onNavigate={(navType, navItem) => {
           // Find the full item from context by name and type
           if (!context) return;
