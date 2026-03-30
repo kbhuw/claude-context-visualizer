@@ -138,6 +138,20 @@ export default function DetailPanel({ item, type, onClose, onNavigate, context, 
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [removing, setRemoving] = useState(false);
 
+  // Prevent Escape from closing the Sheet when the confirmation dialog is open
+  useEffect(() => {
+    if (!confirmingRemove) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        e.preventDefault();
+        if (!removing) setConfirmingRemove(false);
+      }
+    };
+    document.addEventListener('keydown', handler, true);
+    return () => document.removeEventListener('keydown', handler, true);
+  }, [confirmingRemove, removing]);
+
   useEffect(() => {
     if (!item) {
       setFileContent(null);
@@ -364,7 +378,7 @@ export default function DetailPanel({ item, type, onClose, onNavigate, context, 
 
   return (
     <>
-    <Sheet open={item !== null} onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Sheet open={item !== null} onOpenChange={(open) => { if (!open && !confirmingRemove) onClose(); }}>
       <SheetContent side="right" preventOverlayClose={preventOverlayClose}>
         <SheetHeader>
           <div className="flex items-center gap-3 min-w-0">
@@ -925,11 +939,11 @@ export default function DetailPanel({ item, type, onClose, onNavigate, context, 
       </SheetContent>
     </Sheet>
 
-    {/* Plugin removal confirmation dialog */}
+    {/* Removal confirmation dialog */}
     {confirmingRemove && (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center">
+      <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ pointerEvents: 'auto' }} onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
         <div className="absolute inset-0 bg-black/50" onClick={() => !removing && setConfirmingRemove(false)} />
-        <div className="relative z-[101] bg-background border border-border rounded-lg shadow-xl p-6 max-w-sm w-full mx-4 space-y-4">
+        <div className="relative z-[101] bg-background border border-border rounded-lg shadow-xl p-6 max-w-sm w-full mx-4 space-y-4" style={{ pointerEvents: 'auto' }}>
           <div className="space-y-2">
             <h3 className="text-base font-semibold text-foreground">Remove {type === 'mcpServer' ? 'MCP server' : type}</h3>
             <p className="text-sm text-muted-foreground">
