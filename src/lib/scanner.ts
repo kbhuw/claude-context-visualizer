@@ -760,7 +760,18 @@ export async function scanContext(projectPath: string | null, customSources: str
         const tempHooksJsonPath = path.join(tempDir, 'hooks', 'hooks.json');
         const tempHooksJson = await readJsonFile(tempHooksJsonPath) as Record<string, unknown> | null;
         if (tempHooksJson?.hooks && typeof tempHooksJson.hooks === 'object') {
-          const sessionHooks = extractHooks(tempHooksJson.hooks as Record<string, unknown>, 'global', 'Session Hooks', tempHooksJsonPath);
+          // Resolve the actual plugin name from the temp_git dir's package.json
+          let sessionSource = 'Session Hooks';
+          try {
+            const pkgJsonPath = path.join(tempDir, 'package.json');
+            const pkgJson = await readJsonFile(pkgJsonPath) as Record<string, unknown> | null;
+            if (pkgJson?.name && typeof pkgJson.name === 'string') {
+              sessionSource = pkgJson.name;
+            }
+          } catch {
+            // Fall back to 'Session Hooks' if package.json is missing/unreadable
+          }
+          const sessionHooks = extractHooks(tempHooksJson.hooks as Record<string, unknown>, 'global', sessionSource, tempHooksJsonPath);
           // Only add hooks that aren't already found from installed plugins (deduplicate by command)
           const existingCommands = new Set(allHooks.map(h => h.command));
           for (const h of sessionHooks) {

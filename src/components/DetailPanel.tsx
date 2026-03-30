@@ -339,8 +339,11 @@ export default function DetailPanel({ item, type, onClose, onNavigate, context, 
     if (source.toLowerCase().includes('plugin:') || source === 'Plugin') return false;
     // Built-in skills can't be removed
     if (type === 'skill' && source === 'built-in') return false;
-    // Session hooks can't be removed
-    if (type === 'hook' && source.toLowerCase().includes('session')) return false;
+    // Hooks can only be removed if they come from user settings files (Global Settings, Local Settings, etc.)
+    if (type === 'hook') {
+      const userSources = ['global settings', 'local settings', 'shared settings'];
+      if (!userSources.includes(source.toLowerCase())) return false;
+    }
     // Source items aren't removable
     if (type === 'source') return false;
     // Supported types
