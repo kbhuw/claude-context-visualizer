@@ -81,6 +81,10 @@ bun run scan --conductor-projects    # Conductor repos, worktrees, main repo pat
 # File reading
 bun run scan --read-file <path>      # Read any file (JSON secrets masked)
 
+# Hook enrichment (agent-assisted analysis)
+bun run scan --dump-hooks -p <path>      # Dump all hooks with source code as JSON
+bun run scan --write-enrichments         # Write enrichment JSON from stdin to ~/.claude/hook-enrichments.json
+
 # MCP introspection (unified)
 bun run scan --introspect --all -p <path>          # Introspect all MCP servers
 bun run scan --introspect --server <name> -p <path> # Introspect one server

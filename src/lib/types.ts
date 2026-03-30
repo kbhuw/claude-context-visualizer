@@ -50,6 +50,13 @@ export interface Hook {
   command: string;
   event?: string;
   matcher?: string;
+  // Enrichment fields (populated from ~/.claude/hook-enrichments.json)
+  description?: string;
+  riskLevel?: 'low' | 'medium' | 'high';
+  contextImpact?: 'none' | 'injects' | 'modifies';
+  origin?: string;
+  tags?: string[];
+  enrichedAt?: string;
 }
 
 export interface Command {

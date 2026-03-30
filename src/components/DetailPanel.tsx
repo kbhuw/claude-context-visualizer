@@ -339,8 +339,11 @@ export default function DetailPanel({ item, type, onClose, onNavigate, context, 
     if (source.toLowerCase().includes('plugin:') || source === 'Plugin') return false;
     // Built-in skills can't be removed
     if (type === 'skill' && source === 'built-in') return false;
-    // Session hooks can't be removed
-    if (type === 'hook' && source.toLowerCase().includes('session')) return false;
+    // Hooks can only be removed if they come from user settings files (Global Settings, Local Settings, etc.)
+    if (type === 'hook') {
+      const userSources = ['global settings', 'local settings', 'shared settings'];
+      if (!userSources.includes(source.toLowerCase())) return false;
+    }
     // Source items aren't removable
     if (type === 'source') return false;
     // Supported types
@@ -549,6 +552,68 @@ export default function DetailPanel({ item, type, onClose, onNavigate, context, 
                   </span>
                 </div>
               </div>
+              {/* Hook Enrichment */}
+              {!!(item?.description || item?.riskLevel) && (
+                <div className="mt-3 pt-3 border-t border-border space-y-1.5">
+                  <h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    Analysis
+                  </h4>
+                  {!!item?.description && (
+                    <div className="flex items-start gap-2">
+                      <span className="text-[11px] text-muted-foreground w-16 flex-shrink-0">Summary</span>
+                      <span className="text-sm text-foreground">{String(item.description)}</span>
+                    </div>
+                  )}
+                  {!!item?.riskLevel && (
+                    <div className="flex items-start gap-2">
+                      <span className="text-[11px] text-muted-foreground w-16 flex-shrink-0">Risk</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase ${
+                        item.riskLevel === 'high'
+                          ? 'bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-100'
+                          : item.riskLevel === 'medium'
+                            ? 'bg-yellow-50 text-yellow-600 dark:bg-yellow-950 dark:text-yellow-100'
+                            : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-100'
+                      }`}>
+                        {String(item.riskLevel)}
+                      </span>
+                    </div>
+                  )}
+                  {!!item?.contextImpact && item.contextImpact !== 'none' && (
+                    <div className="flex items-start gap-2">
+                      <span className="text-[11px] text-muted-foreground w-16 flex-shrink-0">Context</span>
+                      <span className="text-sm text-foreground">
+                        {item.contextImpact === 'injects' ? 'Injects into context window' : 'Modifies tool output'}
+                      </span>
+                    </div>
+                  )}
+                  {!!item?.origin && (
+                    <div className="flex items-start gap-2">
+                      <span className="text-[11px] text-muted-foreground w-16 flex-shrink-0">Origin</span>
+                      <span className="text-sm text-foreground">{String(item.origin)}</span>
+                    </div>
+                  )}
+                  {Array.isArray(item?.tags) && (item.tags as string[]).length > 0 && (
+                    <div className="flex items-start gap-2">
+                      <span className="text-[11px] text-muted-foreground w-16 flex-shrink-0">Tags</span>
+                      <div className="flex flex-wrap gap-1">
+                        {(item.tags as string[]).map((tag: string) => (
+                          <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {!!item?.enrichedAt && (
+                    <div className="flex items-start gap-2">
+                      <span className="text-[11px] text-muted-foreground w-16 flex-shrink-0">Analyzed</span>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(String(item.enrichedAt)).toLocaleDateString()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

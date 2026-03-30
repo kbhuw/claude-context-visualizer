@@ -46,6 +46,8 @@ interface CliArgs {
   introspect: boolean;
   introspectServer: string | null;
   introspectAll: boolean;
+  dumpHooks: boolean;
+  writeEnrichments: boolean;
   help: boolean;
 }
 
@@ -61,6 +63,8 @@ function parseArgs(argv: string[]): CliArgs {
     introspect: false,
     introspectServer: null,
     introspectAll: false,
+    dumpHooks: false,
+    writeEnrichments: false,
     help: false,
   };
 
@@ -88,6 +92,10 @@ function parseArgs(argv: string[]): CliArgs {
       args.introspectServer = rawArgs[i];
     } else if (arg === '--all') {
       args.introspectAll = true;
+    } else if (arg === '--dump-hooks') {
+      args.dumpHooks = true;
+    } else if (arg === '--write-enrichments') {
+      args.writeEnrichments = true;
     } else if ((arg === '--project' || arg === '-p') && i + 1 < rawArgs.length) {
       i++;
       args.projectPath = path.resolve(rawArgs[i]);
@@ -124,6 +132,8 @@ Options:
   --conductor-projects       List Conductor projects (repos, worktrees, main repos)
   --read-file <path>         Read a file (JSON secrets masked)
   --introspect               Introspect MCP servers (use with --all or --server <name>)
+  --dump-hooks               Output all hooks with source code as JSON (for agent analysis)
+  --write-enrichments        Read enrichment JSON from stdin, merge into ~/.claude/hook-enrichments.json
   --help, -h                 Show this help
 
 Sections:
@@ -444,6 +454,58 @@ async function main() {
 
   if (args.introspect) {
     await introspectServers(args.projectPath, args.introspectServer, args.introspectAll, indent);
+    process.exit(0);
+  }
+
+  if (args.writeEnrichments) {
+    const { mergeEnrichments } = await import('./lib/enrichment');
+    const chunks: Buffer[] = [];
+    for await (const chunk of process.stdin) {
+      chunks.push(chunk as Buffer);
+    }
+    const input = Buffer.concat(chunks).toString('utf-8').trim();
+    if (!input) {
+      console.error('Error: no JSON provided on stdin');
+      process.exit(1);
+    }
+    try {
+      const incoming = JSON.parse(input);
+      const merged = await mergeEnrichments(incoming);
+      console.log(`Wrote ${Object.keys(incoming).length} enrichments (${Object.keys(merged).length} total)`);
+      process.exit(0);
+    } catch (err) {
+      console.error('Error: invalid JSON on stdin', err);
+      process.exit(1);
+    }
+  }
+
+  if (args.dumpHooks) {
+    const effectivePath = args.projectPath || process.cwd();
+    const context = await scanContext(effectivePath, args.customSources);
+    const { computeHookKey } = await import('./lib/enrichment');
+    const dumpedHooks = await Promise.all(
+      context.hooks.map(async (hook) => {
+        let sourceCode: string | null = null;
+        if (hook.sourcePath) {
+          try {
+            sourceCode = await fs.readFile(hook.sourcePath, 'utf-8');
+          } catch {
+            sourceCode = null;
+          }
+        }
+        return {
+          key: computeHookKey(hook.command, hook.event || hook.name, hook.matcher || ''),
+          event: hook.event || hook.name,
+          matcher: hook.matcher || '',
+          command: hook.command,
+          scope: hook.scope,
+          source: hook.source,
+          sourcePath: hook.sourcePath || null,
+          sourceCode,
+        };
+      }),
+    );
+    console.log(JSON.stringify(dumpedHooks, null, 2));
     process.exit(0);
   }
 
