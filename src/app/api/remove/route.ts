@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readFile, writeFile, rm, unlink, stat } from 'fs/promises';
-import { join } from 'path';
+import { join, dirname, basename } from 'path';
 import { homedir } from 'os';
 
 const INSTALLED_PLUGINS_PATH = join(homedir(), '.claude', 'plugins', 'installed_plugins.json');
@@ -140,7 +140,7 @@ async function removeMcpServer(name: string, sourcePath: string) {
   await writeFile(sourcePath, JSON.stringify(data, null, 2) + '\n');
 }
 
-async function removeFileOrDir(filePath: string) {
+async function removeFileOrDir(filePath: string, type?: string) {
   if (!filePath) throw new Error('No file path provided');
 
   // Safety: only allow deletion under ~/.claude, ~/.agents, or project .claude directories
@@ -157,11 +157,30 @@ async function removeFileOrDir(filePath: string) {
     throw new Error('Cannot delete files outside of .claude or .agents directories');
   }
 
-  const stats = await stat(filePath);
+  // For skills, if filePath points to a file inside a skill directory (e.g. skills/foo/SKILL.md),
+  // delete the parent directory instead of just the file
+  let targetPath = filePath;
+  if (type === 'skill') {
+    const parentDir = dirname(filePath);
+    const parentName = basename(parentDir);
+    // If the parent is a skills directory container (not "skills" itself), delete the parent
+    if (parentName !== 'skills' && parentName !== 'commands') {
+      try {
+        const parentStats = await stat(parentDir);
+        if (parentStats.isDirectory()) {
+          targetPath = parentDir;
+        }
+      } catch {
+        // Parent doesn't exist, fall through to delete the file itself
+      }
+    }
+  }
+
+  const stats = await stat(targetPath);
   if (stats.isDirectory()) {
-    await rm(filePath, { recursive: true });
+    await rm(targetPath, { recursive: true });
   } else {
-    await unlink(filePath);
+    await unlink(targetPath);
   }
 }
 
@@ -247,7 +266,7 @@ export async function DELETE(req: NextRequest) {
       case 'skill':
       case 'command': {
         const { filePath } = body;
-        await removeFileOrDir(filePath);
+        await removeFileOrDir(filePath, type);
         break;
       }
 
