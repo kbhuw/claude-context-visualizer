@@ -132,6 +132,8 @@ Options:
   --conductor-projects       List Conductor projects (repos, worktrees, main repos)
   --read-file <path>         Read a file (JSON secrets masked)
   --introspect               Introspect MCP servers (use with --all or --server <name>)
+  --dump-hooks               Output all hooks with source code as JSON (for agent analysis)
+  --write-enrichments        Read enrichment JSON from stdin, merge into ~/.claude/hook-enrichments.json
   --help, -h                 Show this help
 
 Sections:
