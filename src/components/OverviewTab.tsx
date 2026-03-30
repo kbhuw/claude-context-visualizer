@@ -513,6 +513,21 @@ function HooksCard({
           <span className="w-2 h-2 rounded-full bg-amber-500" />
           <h3 className="text-sm font-semibold text-foreground">Hooks</h3>
           <span className="text-xs text-muted-foreground">{hooks.length}</span>
+          <span className="text-[10px] text-muted-foreground">
+            ({hooks.filter(h => h.enrichedAt).length}/{hooks.length} analyzed)
+          </span>
+          <div className="group relative">
+            <svg className="w-3.5 h-3.5 text-muted-foreground cursor-help" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+            </svg>
+            <div className="absolute left-0 top-5 z-50 hidden group-hover:block w-64 p-2.5 rounded-lg bg-popover border border-border shadow-lg text-xs text-popover-foreground">
+              <p className="font-semibold mb-1">Analyze your hooks</p>
+              <p className="text-muted-foreground">Ask your agent to run:</p>
+              <code className="block mt-1 text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded break-all">bun run scan --dump-hooks -p .</code>
+              <p className="text-muted-foreground mt-1">Then pipe analysis into:</p>
+              <code className="block mt-1 text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded break-all">bun run scan --write-enrichments</code>
+            </div>
+          </div>
         </div>
         {/* Group toggle */}
         <div className="flex items-center gap-0.5 bg-muted rounded-md p-0.5">
@@ -559,7 +574,7 @@ function HooksCard({
                 >
                   <div className="min-w-0 flex-1">
                     <span className="text-foreground text-xs font-mono truncate block">
-                      {commandLabel(hook.command)}
+                      {hook.description || commandLabel(hook.command)}
                     </span>
                     {hook.matcher && (
                       <span className="text-[10px] text-muted-foreground truncate block">
@@ -567,14 +582,31 @@ function HooksCard({
                       </span>
                     )}
                   </div>
-                  {/* Badge shows the "other" dimension — source when grouped by event, event when grouped by source */}
-                  <Badge className={`flex-shrink-0 ${
-                    groupMode === 'event'
-                      ? getSourceBadgeClass(hook.source)
-                      : 'bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-100'
-                  }`}>
-                    {groupMode === 'event' ? hook.source : (hook.event || hook.name)}
-                  </Badge>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {hook.riskLevel && (
+                      <Badge className={
+                        hook.riskLevel === 'high'
+                          ? 'bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-100'
+                          : hook.riskLevel === 'medium'
+                            ? 'bg-yellow-50 text-yellow-600 dark:bg-yellow-950 dark:text-yellow-100'
+                            : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-100'
+                      }>
+                        {hook.riskLevel}
+                      </Badge>
+                    )}
+                    {hook.contextImpact && hook.contextImpact !== 'none' && (
+                      <Badge className="bg-purple-50 text-purple-600 dark:bg-purple-950 dark:text-purple-100">
+                        {hook.contextImpact === 'injects' ? 'injects' : 'modifies'}
+                      </Badge>
+                    )}
+                    <Badge className={
+                      groupMode === 'event'
+                        ? getSourceBadgeClass(hook.source)
+                        : 'bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-100'
+                    }>
+                      {groupMode === 'event' ? hook.source : (hook.event || hook.name)}
+                    </Badge>
+                  </div>
                 </button>
               ))}
             </div>
