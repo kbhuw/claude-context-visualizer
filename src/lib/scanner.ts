@@ -1,6 +1,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
+import { computeHookKey, loadEnrichments } from './enrichment';
 import {
   ConfigSource,
   McpServer,
@@ -1125,6 +1126,23 @@ export async function scanContext(projectPath: string | null, customSources: str
   for (const skill of allSkills) {
     if ((skill.source === 'Global Skills' || skill.source === 'Local Skills') && agentSkillNames.has(skill.name)) {
       skill.alsoInAgents = true;
+    }
+  }
+
+  // Merge enrichments from ~/.claude/hook-enrichments.json
+  const enrichments = await loadEnrichments();
+  if (Object.keys(enrichments).length > 0) {
+    for (const hook of allHooks) {
+      const key = computeHookKey(hook.command, hook.event || hook.name, hook.matcher || '');
+      const enrichment = enrichments[key];
+      if (enrichment) {
+        hook.description = enrichment.description;
+        hook.riskLevel = enrichment.riskLevel;
+        hook.contextImpact = enrichment.contextImpact;
+        hook.origin = enrichment.origin;
+        hook.tags = enrichment.tags;
+        hook.enrichedAt = enrichment.enrichedAt;
+      }
     }
   }
 
