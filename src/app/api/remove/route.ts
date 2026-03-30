@@ -5,6 +5,7 @@ import { homedir } from 'os';
 
 const INSTALLED_PLUGINS_PATH = join(homedir(), '.claude', 'plugins', 'installed_plugins.json');
 const CLIENT_STATE_PATH = join(homedir(), '.claude.json');
+const SETTINGS_PATH = join(homedir(), '.claude', 'settings.json');
 
 async function removePlugin(name: string) {
   // 1. Remove from installed_plugins.json
@@ -31,7 +32,27 @@ async function removePlugin(name: string) {
     // installed_plugins.json may not exist — that's fine
   }
 
-  // 2. Also clean up any MCP server entries contributed by this plugin from ~/.claude.json
+  // 2. Remove from enabledPlugins in ~/.claude/settings.json
+  //    This is the key step — if the plugin stays in enabledPlugins,
+  //    Claude Code will re-install it on next launch.
+  try {
+    const raw = await readFile(SETTINGS_PATH, 'utf-8');
+    const settings = JSON.parse(raw);
+
+    if (settings.enabledPlugins && typeof settings.enabledPlugins === 'object') {
+      const matchingKey = Object.keys(settings.enabledPlugins).find(
+        (key) => key.startsWith(name + '@') || key === name
+      );
+      if (matchingKey) {
+        delete settings.enabledPlugins[matchingKey];
+        await writeFile(SETTINGS_PATH, JSON.stringify(settings, null, 2) + '\n');
+      }
+    }
+  } catch {
+    // settings.json may not exist — that's fine
+  }
+
+  // 3. Also clean up any MCP server entries contributed by this plugin from ~/.claude.json
   //    Plugin MCP servers can appear as "name", "plugin:name:*", or matching the plugin name
   try {
     const raw = await readFile(CLIENT_STATE_PATH, 'utf-8');
