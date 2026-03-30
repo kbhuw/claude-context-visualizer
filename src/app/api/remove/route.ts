@@ -4,26 +4,83 @@ import { join } from 'path';
 import { homedir } from 'os';
 
 const INSTALLED_PLUGINS_PATH = join(homedir(), '.claude', 'plugins', 'installed_plugins.json');
+const CLIENT_STATE_PATH = join(homedir(), '.claude.json');
 
 async function removePlugin(name: string) {
-  const raw = await readFile(INSTALLED_PLUGINS_PATH, 'utf-8');
-  const data = JSON.parse(raw);
+  // 1. Remove from installed_plugins.json
+  try {
+    const raw = await readFile(INSTALLED_PLUGINS_PATH, 'utf-8');
+    const data = JSON.parse(raw);
 
-  if (data.version === 2 && data.plugins) {
-    const matchingKey = Object.keys(data.plugins).find(
-      (key) => key.startsWith(name + '@') || key === name
-    );
-    if (!matchingKey) throw new Error(`Plugin "${name}" not found`);
-    delete data.plugins[matchingKey];
-  } else if (Array.isArray(data)) {
-    const idx = data.findIndex((p: { name: string }) => p.name === name);
-    if (idx === -1) throw new Error(`Plugin "${name}" not found`);
-    data.splice(idx, 1);
-  } else {
-    throw new Error('Unknown plugin file format');
+    if (data.version === 2 && data.plugins) {
+      const matchingKey = Object.keys(data.plugins).find(
+        (key) => key.startsWith(name + '@') || key === name
+      );
+      if (matchingKey) {
+        delete data.plugins[matchingKey];
+        await writeFile(INSTALLED_PLUGINS_PATH, JSON.stringify(data, null, 2) + '\n');
+      }
+    } else if (Array.isArray(data)) {
+      const idx = data.findIndex((p: { name: string }) => p.name === name);
+      if (idx !== -1) {
+        data.splice(idx, 1);
+        await writeFile(INSTALLED_PLUGINS_PATH, JSON.stringify(data, null, 2) + '\n');
+      }
+    }
+  } catch {
+    // installed_plugins.json may not exist — that's fine
   }
 
-  await writeFile(INSTALLED_PLUGINS_PATH, JSON.stringify(data, null, 2) + '\n');
+  // 2. Also clean up any MCP server entries contributed by this plugin from ~/.claude.json
+  //    Plugin MCP servers can appear as "name", "plugin:name:*", or matching the plugin name
+  try {
+    const raw = await readFile(CLIENT_STATE_PATH, 'utf-8');
+    const clientState = JSON.parse(raw);
+    let modified = false;
+
+    const isPluginServer = (serverName: string) =>
+      serverName === name ||
+      serverName.startsWith(`plugin:${name}:`);
+
+    // Top-level mcpServers
+    if (clientState.mcpServers && typeof clientState.mcpServers === 'object') {
+      for (const serverName of Object.keys(clientState.mcpServers)) {
+        if (isPluginServer(serverName)) {
+          delete clientState.mcpServers[serverName];
+          modified = true;
+        }
+      }
+    }
+
+    // Project-specific mcpServers
+    if (clientState.projects && typeof clientState.projects === 'object') {
+      for (const projectPath of Object.keys(clientState.projects)) {
+        const proj = clientState.projects[projectPath];
+        if (proj.mcpServers && typeof proj.mcpServers === 'object') {
+          for (const serverName of Object.keys(proj.mcpServers)) {
+            if (isPluginServer(serverName)) {
+              delete proj.mcpServers[serverName];
+              modified = true;
+            }
+          }
+        }
+        // Also clean up disabledMcpServers references
+        if (Array.isArray(proj.disabledMcpServers)) {
+          const before = proj.disabledMcpServers.length;
+          proj.disabledMcpServers = proj.disabledMcpServers.filter(
+            (s: string) => !isPluginServer(s)
+          );
+          if (proj.disabledMcpServers.length < before) modified = true;
+        }
+      }
+    }
+
+    if (modified) {
+      await writeFile(CLIENT_STATE_PATH, JSON.stringify(clientState, null, 2) + '\n');
+    }
+  } catch {
+    // ~/.claude.json may not exist — that's fine
+  }
 }
 
 async function removeMcpServer(name: string, sourcePath: string) {
