@@ -33,6 +33,7 @@ import {
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import type { Editor } from '@tiptap/react';
 import FileBrowserModal from './FileBrowserModal';
+import type { MarkdownFile } from '@/lib/types';
 
 interface HeadingItem {
   level: number;
@@ -140,6 +141,7 @@ interface MarkdownEditorProps {
   filePath: string;
   initialContent: string;
   onSaveStatusChange?: (status: 'saved' | 'unsaved' | 'saving') => void;
+  markdownFiles?: MarkdownFile[];
 }
 
 function ToolbarButton({
@@ -180,6 +182,7 @@ export default function MarkdownEditor({
   filePath,
   initialContent,
   onSaveStatusChange,
+  markdownFiles,
 }: MarkdownEditorProps) {
   const [saveStatus, setSaveStatus] = useState<'saved' | 'unsaved' | 'saving'>('saved');
   const [fileBrowserOpen, setFileBrowserOpen] = useState(false);
@@ -506,6 +509,7 @@ export default function MarkdownEditor({
         open={fileBrowserOpen}
         onClose={() => setFileBrowserOpen(false)}
         onSelect={insertInclude}
+        markdownFiles={markdownFiles}
       />
     </div>
   );

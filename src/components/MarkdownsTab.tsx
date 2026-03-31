@@ -70,6 +70,7 @@ function EditorPane({
   onFocus,
   onClose,
   onSplitActivate,
+  markdownFiles,
 }: {
   pane: PaneState;
   paneKey: 'left' | 'right';
@@ -79,6 +80,7 @@ function EditorPane({
   onFocus: (pane: 'left' | 'right') => void;
   onClose: (pane: 'left' | 'right') => void;
   onSplitActivate: () => void;
+  markdownFiles: MarkdownFile[];
 }) {
   if (!pane.file) {
     return (
@@ -153,6 +155,7 @@ function EditorPane({
           key={pane.file.path}
           filePath={pane.file.path}
           initialContent={pane.content}
+          markdownFiles={markdownFiles}
         />
       </div>
     </div>
@@ -656,11 +659,11 @@ export default function MarkdownsTab({ markdownFiles, extraMdDirs, onAddMdDir, o
 
       {/* Editor area */}
       <div className="flex-1 flex min-w-0">
-        <EditorPane pane={leftPane} paneKey="left" showClose={splitActive} focusedPane={focusedPane} splitActive={splitActive} onFocus={setFocusedPane} onClose={closePane} onSplitActivate={handleSplitActivate} />
+        <EditorPane pane={leftPane} paneKey="left" showClose={splitActive} focusedPane={focusedPane} splitActive={splitActive} onFocus={setFocusedPane} onClose={closePane} onSplitActivate={handleSplitActivate} markdownFiles={markdownFiles} />
         {splitActive && (
           <>
             <div className="w-px bg-border flex-shrink-0" />
-            <EditorPane pane={rightPane} paneKey="right" showClose focusedPane={focusedPane} splitActive={splitActive} onFocus={setFocusedPane} onClose={closePane} onSplitActivate={handleSplitActivate} />
+            <EditorPane pane={rightPane} paneKey="right" showClose focusedPane={focusedPane} splitActive={splitActive} onFocus={setFocusedPane} onClose={closePane} onSplitActivate={handleSplitActivate} markdownFiles={markdownFiles} />
           </>
         )}
       </div>
