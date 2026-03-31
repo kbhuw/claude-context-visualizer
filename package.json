@@ -1,14 +1,51 @@
 {
   "name": "claude-context-visualizer",
   "version": "0.1.0",
-  "private": true,
+  "description": "Inspect and visualize Claude Code's configuration context — skills, hooks, MCP servers, plugins, commands, and CLAUDE.md across all sources.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kbhuw/claude-context-visualizer.git"
+  },
+  "homepage": "https://github.com/kbhuw/claude-context-visualizer",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "context",
+    "visualizer",
+    "mcp",
+    "skills",
+    "hooks",
+    "plugins",
+    "inspector",
+    "devtools"
+  ],
+  "bin": {
+    "claude-context-visualizer": "bin/ccv.js",
+    "ccv": "bin/ccv.js"
+  },
+  "files": [
+    "bin/",
+    "scripts/",
+    "skill/",
+    "src/",
+    "public/",
+    "next.config.ts",
+    "tsconfig.json",
+    "postcss.config.mjs",
+    "tailwind.config.*"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "scan": "bunx tsx src/cli.ts",
-    "mcp-introspect": "bunx tsx src/cli/mcp-introspect.ts"
+    "postinstall": "node scripts/postinstall.js",
+    "scan": "tsx src/cli.ts",
+    "mcp-introspect": "tsx src/cli/mcp-introspect.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.28.0",
@@ -30,11 +67,11 @@
     "clsx": "^2.1.1",
     "lucide-react": "^1.7.0",
     "next": "16.2.1",
-    "pg": "^8.20.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "tailwind-merge": "^3.5.0",
-    "tiptap-markdown": "^0.9.0"
+    "tiptap-markdown": "^0.9.0",
+    "tsx": "^4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
