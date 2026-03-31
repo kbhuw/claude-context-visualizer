@@ -12,6 +12,12 @@ import {
   GitBranch,
   ExternalLink,
   FolderPlus,
+  Shield,
+  Scale,
+  Wand2,
+  Terminal,
+  Brain,
+  BookOpen,
 } from 'lucide-react';
 
 interface MarkdownsTabProps {
@@ -350,7 +356,18 @@ export default function MarkdownsTab({ markdownFiles, extraMdDirs, onAddMdDir, o
     onOpenFileHandled?.();
   }, [openFilePath]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function FileListItem({ file, isActive, showScopeDot }: { file: MarkdownFile; isActive: boolean; showScopeDot?: boolean }) {
+  const categoryIcons: Record<string, { icon: typeof FileText; color: string }> = {
+    Critical: { icon: Shield, color: 'text-amber-500' },
+    Rules: { icon: Scale, color: 'text-violet-500' },
+    Skills: { icon: Wand2, color: 'text-cyan-500' },
+    Commands: { icon: Terminal, color: 'text-emerald-500' },
+    Memory: { icon: Brain, color: 'text-pink-500' },
+    Docs: { icon: BookOpen, color: 'text-orange-500' },
+  };
+
+  function FileListItem({ file, isActive, critical, showScopeDot }: { file: MarkdownFile; isActive: boolean; critical?: boolean; showScopeDot?: boolean }) {
+    const cat = critical ? 'Critical' : getFileCategory(file);
+    const { icon: Icon, color } = categoryIcons[cat] || { icon: FileText, color: 'text-muted-foreground' };
     return (
       <button
         type="button"
@@ -366,8 +383,8 @@ export default function MarkdownsTab({ markdownFiles, extraMdDirs, onAddMdDir, o
         }`}
         title={`Click to open • Right-click to open in split`}
       >
-        <FileText size={13} className="flex-shrink-0 opacity-60" />
-        <span className="truncate">{showScopeDot ? file.name : file.relativePath}</span>
+        <Icon size={13} className={`flex-shrink-0 ${color}`} />
+        <span className="truncate">{showScopeDot ? file.name : getShortDisplayPath(file)}</span>
         {showScopeDot && (
           <span
             className={`flex-shrink-0 w-2 h-2 rounded-full ${file.scope === 'local' ? 'bg-green-500' : 'bg-blue-500'}`}
@@ -378,7 +395,32 @@ export default function MarkdownsTab({ markdownFiles, extraMdDirs, onAddMdDir, o
     );
   }
 
-  function FileGroup({ label, files, color, showScopeDots }: { label: string; files: MarkdownFile[]; color: string; showScopeDots?: boolean }) {
+  /** Categorize a file by its path into a subgroup */
+  function getFileCategory(file: MarkdownFile): string {
+    const rp = file.relativePath.toLowerCase();
+    if (rp.includes('skills/') || rp.includes('.skills/')) return 'Skills';
+    if (rp.includes('commands/')) return 'Commands';
+    if (rp.includes('memory/')) return 'Memory';
+    if (rp.includes('docs/')) return 'Docs';
+    return 'Rules';
+  }
+
+  /** Shorten relativePath to just the category prefix + filename */
+  function getShortDisplayPath(file: MarkdownFile): string {
+    const rp = file.relativePath;
+    // Match known directory segments and return from that point
+    const patterns = [/(?:\.?skills\/)/, /commands\//, /memory\//, /docs\//];
+    for (const pat of patterns) {
+      const match = rp.match(pat);
+      if (match && match.index !== undefined) {
+        return rp.slice(match.index);
+      }
+    }
+    // For rules/other files, just show the filename
+    return rp.split('/').pop() || rp;
+  }
+
+  function FileGroup({ label, files, color, critical, showScopeDots }: { label: string; files: MarkdownFile[]; color: string; critical?: boolean; showScopeDots?: boolean }) {
     if (files.length === 0) return null;
     return (
       <div className="mb-3">
@@ -393,10 +435,56 @@ export default function MarkdownsTab({ markdownFiles, extraMdDirs, onAddMdDir, o
               isActive={
                 leftPane.file?.path === file.path || rightPane.file?.path === file.path
               }
+              critical={critical}
               showScopeDot={showScopeDots}
             />
           ))}
         </div>
+      </div>
+    );
+  }
+
+  /** Group files by category and render with subgroup headers */
+  function ScopedFileGroup({ label, files, color }: { label: string; files: MarkdownFile[]; color: string }) {
+    if (files.length === 0) return null;
+
+    // Group files by category
+    const groups = new Map<string, MarkdownFile[]>();
+    for (const file of files) {
+      const cat = getFileCategory(file);
+      if (!groups.has(cat)) groups.set(cat, []);
+      groups.get(cat)!.push(file);
+    }
+
+    // Stable ordering for categories
+    const categoryOrder = ['Rules', 'Skills', 'Commands', 'Memory', 'Docs'];
+    const sortedCategories = categoryOrder.filter((c) => groups.has(c));
+
+    return (
+      <div className="mb-3">
+        <div className={`text-[10px] font-semibold uppercase tracking-wider px-2.5 mb-1 ${color}`}>
+          {label}
+        </div>
+        {sortedCategories.map((cat) => {
+          return (
+            <div key={cat}>
+              <div className="text-[10px] font-medium uppercase tracking-wider px-4 py-0.5 text-foreground/80">
+                {cat}
+              </div>
+              <div className="space-y-0.5">
+                {groups.get(cat)!.map((file) => (
+                  <FileListItem
+                    key={file.path}
+                    file={file}
+                    isActive={
+                      leftPane.file?.path === file.path || rightPane.file?.path === file.path
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
     );
   }
@@ -515,9 +603,9 @@ export default function MarkdownsTab({ markdownFiles, extraMdDirs, onAddMdDir, o
 
           {/* File list */}
           <div className="flex-1 overflow-auto py-2 px-1">
-            <FileGroup label="Critical" files={criticalFiles} color="text-amber-500" showScopeDots />
-            <FileGroup label="Local" files={localFiles} color="text-green-500" />
-            <FileGroup label="Global" files={globalFiles} color="text-blue-500" />
+            <FileGroup label="Critical" files={criticalFiles} color="text-amber-500" critical showScopeDots />
+            <ScopedFileGroup label="Local" files={localFiles} color="text-green-500" />
+            <ScopedFileGroup label="Global" files={globalFiles} color="text-blue-500" />
             {filteredFiles.length === 0 && (
               <div className="text-center text-muted-foreground text-[12px] py-8">
                 No .md files found
