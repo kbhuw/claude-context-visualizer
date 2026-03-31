@@ -53,22 +53,27 @@ bun run scan <path>  # CLI: scan project + global context
 ## Project Structure
 
 - `src/app/` — Next.js app router pages and API routes
-- `src/app/api/` — Backend endpoints (context, browse, file, mcp-introspect, projects)
+- `src/app/api/` — Backend endpoints (context, browse, file, ls, mcp-introspect, open, plugins, projects, remove)
 - `src/components/` — React UI components (tab views, detail panels, editors)
 - `src/components/ui/` — shadcn/ui primitives
 - `src/lib/scanner.ts` — Core context scanning logic (the heart of the app)
 - `src/lib/types.ts` — Shared TypeScript interfaces
+- `src/lib/enrichment.ts` — Hook enrichment system (SHA256 keying, metadata storage)
+- `src/lib/mcp-cache.ts` — In-memory MCP server capabilities cache
+- `src/hooks/` — React hooks (useMcpAutoConnect for MCP server auto-connection)
 - `src/cli/` — CLI entry points for scanning and MCP introspection
 
 ## Architecture
 
 The app has two modes: **web UI** and **CLI**.
 
-**Scanning pipeline** (`src/lib/scanner.ts`): Scans sources in priority order — global settings, client state, installed plugins (with their skills/hooks/commands/agents), session hooks, project-local config (settings, CLAUDE.md with @include support, .mcp.json, skills, commands), shared project settings, and built-in skills extracted from the Claude Code binary.
+**Scanning pipeline** (`src/lib/scanner.ts`): Scans 20+ configuration sources in priority order — managed settings (system-level + drop-in + managed MCP), global settings, client state, installed plugins (v1 and v2 formats, with their skills/hooks/agents/commands/MCP servers), session hooks (from plugin cache `temp_git_*/hooks/hooks.json`), project-local config (settings, CLAUDE.md with @include support, worktree parent CLAUDE.md, .mcp.json, skills, commands), shared project settings, user project CLAUDE.md, auto-memory (including main repo memory for worktrees), and custom sources.
 
-**Web UI**: Single-page app with tab navigation (Overview, Skills, Hooks, MCP Servers, Plugins, Markdowns, CLAUDE.md). A detail panel slides out to inspect individual items. Supports dark mode.
+**Web UI**: Single-page app with tab navigation (Overview, Skills, Hooks, MCP Servers, Plugins, Markdowns, CLAUDE.md). A detail panel slides out to inspect individual items with actions: copy path, open in Finder, edit markdown, delete item, refresh MCP introspection. MCP servers support live introspection showing tools, resources, and prompts with auto-connect caching. Supports dark mode.
 
-**API routes**: `/api/context` is the main endpoint that triggers scanning. Other routes handle file browsing, reading/writing files, MCP introspection, and project discovery.
+**Hook enrichment** (`src/lib/enrichment.ts`): Stores hook metadata (description, risk level, context impact, origin, tags) in `~/.claude/hook-enrichments.json` keyed by SHA256 hash of command::event::matcher. Enrichments are merged into hook objects during scanning without modifying hook definitions.
+
+**API routes**: 9 endpoints — `/api/context` (main scanning), `/api/file` (read/write with secret masking), `/api/projects` (project discovery), `/api/mcp-introspect` (live MCP introspection), `/api/browse` (macOS folder picker), `/api/ls` (directory listing for file browser), `/api/open` (open in Finder), `/api/plugins` (plugin removal), `/api/remove` (unified deletion for plugins, MCP servers, skills, commands, hooks, agents).
 
 ## Conductor Integration
 
@@ -119,28 +124,43 @@ bun run scan --introspect --server <name> -p <path> # Introspect one server
 
 ### API (dev server at :3000)
 
-MethodEndpointPurposeGET`/api/projects`All projects, conductor repos/worktrees, conductor dirGET`/api/context?project=<path>`Full scan (sources, MCP, plugins, skills, hooks, commands, CLAUDE.md, markdowns)GET`/api/file?path=<path>`Read any file (JSON secrets masked)POST`/api/file`Write .md filesPOST`/api/mcp-introspect`Live MCP server introspection (tools, resources, prompts)POST`/api/browse`macOS folder picker
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/api/projects` | All projects, conductor repos/worktrees, conductor dir |
+| GET | `/api/context?project=<path>` | Full scan (sources, MCP, plugins, skills, hooks, agents, commands, CLAUDE.md, markdowns) |
+| GET | `/api/file?path=<path>` | Read any file (JSON secrets masked for token/key/secret/password/authorization fields) |
+| POST | `/api/file` | Write .md files only |
+| POST | `/api/mcp-introspect` | Live MCP server introspection (tools, resources, prompts) — tries HTTP then SSE |
+| POST | `/api/browse` | macOS folder picker (osascript) |
+| GET | `/api/ls?dir=<path>` | List directory contents (directories + .md files, no hidden files) |
+| POST | `/api/open` | Open file in macOS Finder |
+| DELETE | `/api/plugins` | Remove plugin from installed_plugins.json |
+| DELETE | `/api/remove` | Unified deletion for 6 types: plugin, mcpServer, skill, command, hook, agent |
 
 ### What the scanner extracts
 
 For any project path, the scanner discovers and returns:
 
-- **Sources**: 14 config file locations checked (global settings, client state, plugins, skills dirs, project settings, CLAUDE.md, .mcp.json, commands, shared settings, user project CLAUDE.md, auto-memory)
-- **MCP Servers**: from \~/.claude.json (global + per-project), .mcp.json, plugin configs
-- **Plugins**: name, version, install path, marketplace, and all sub-resources (skills, hooks, agents, commands, MCP servers)
-- **Skills**: from plugins, \~/.claude/skills/, \~/.agents/skills/, project skills dirs, commands-as-skills, built-in skills (extracted from Claude binary)
-- **Hooks**: from global/local/shared settings, plugin hooks.json, session cache hooks — with event, command, matcher, resolved script paths
+- **Sources**: 20+ config locations checked — managed settings (system-level base + drop-in dir + managed MCP), global settings, client state, plugins, session hooks cache, skills dirs, project settings, CLAUDE.md, worktree parent CLAUDE.md, .mcp.json, commands, shared settings, user project CLAUDE.md, auto-memory (project + main repo for worktrees), custom sources
+- **MCP Servers**: from managed-mcp.json, \~/.claude.json (global + per-project), .mcp.json, plugin .mcp.json, plugin package.json mcpServers field, custom sources — with type detection (stdio/http/sse)
+- **Plugins**: v1 (array) and v2 ({version: 2, plugins: {...}}) formats — name, version, install path, marketplace, and all sub-resources (skills, hooks, agents, commands, MCP servers) discovered by scanning plugin directories
+- **Skills**: from plugins, \~/.claude/skills/, \~/.agents/skills/, project skills dirs, commands-as-skills — with size, lines, token estimates, and `alsoInAgents` duplicate detection
+- **Hooks**: from global/local/shared settings, plugin hooks.json (structured format), session cache hooks (`temp_git_*/hooks/hooks.json`) — with event, command, matcher, resolved script paths, and optional enrichment data (description, riskLevel, contextImpact, origin, tags)
+- **Agents**: from plugin agents/ directories, project .agents/ directories — with frontmatter parsing (name, description, model)
 - **Commands**: from \~/.claude/commands/ and project commands dirs, with YAML frontmatter metadata
-- **CLAUDE.md**: fully resolved with @include directives expanded (recursive, 5 levels deep)
-- **Markdown files**: all .md files from \~/.claude/, project root, .claude/, docs/, .skills/, auto-memory
+- **CLAUDE.md**: fully resolved with @include directives expanded (recursive, 5 levels deep), merges worktree parent CLAUDE.md if present
+- **Markdown files**: all .md files from \~/.claude/, project root, .claude/, docs/, .skills/, auto-memory — recursive collection with skip list (node_modules, .git, hidden dirs except .claude)
 
 ## Conventions
 
 - UI components use shadcn/ui patterns with Radix primitives
-- Skill/command metadata uses YAML frontmatter in .md files
+- Skill/command/agent metadata uses YAML frontmatter in .md files
 - Token estimation: \~1 token per 4 characters
 - Scanned items have scope levels: `global`, `local`, `custom`
 - Deduplication prevents the same skill/hook from appearing multiple times
+- Deletion safety: `/api/remove` only allows deletion under \~/.claude/, \~/.agents/, or project /.claude/ paths
+- Secret masking: JSON file reads mask fields matching token, key, secret, password, authorization
+- Hook enrichments keyed by SHA256 hash of `command::event::matcher` (12-char prefix)
 
 # SKILLS & MCP Servers
 
