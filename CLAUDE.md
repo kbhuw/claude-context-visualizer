@@ -2,8 +2,34 @@
 
 A web-based inspection tool for Claude Code's configuration and runtime context. Scans and visualizes settings, MCP servers, plugins, skills, hooks, commands, and markdown documentation across global (\~/.claude), project-local, and custom sources.
 
+# CONDUCTOR
 
-@/Users/kushbhuwalka/.claude/GLOBAL-CLAUDE.md
+You are running inside a **Conductor worktree**. The workspace is a git worktree under `~/conductor/workspaces/puffle-app/`. Everything is already set up:
+
+- `node_modules/` is installed.
+- `.env.local` is symlinked — do NOT create or modify it
+- Do NOT run any setup, bootstrap, or init commands — the environment is ready to go
+
+### Key things to know
+
+- Conductor uses `@anthropic-ai/claude-agent-sdk` bundled as its own binary at `~/Library/Application Support/com.conductor.app/bin/claude`
+
+- This is **not** the same as running `claude` from the terminal (`~/.local/bin/claude` v2.1.87)
+
+- Skills from `.claude/skills/` directories (filesystem-based discovery), both project level and global.
+
+- Conductor environment variables: `CONDUCTOR_WORKSPACE_PATH`, `CONDUCTOR_ROOT_PATH`, `CONDUCTOR_WORKSPACE_NAME`, `CONDUCTOR_DEFAULT_BRANCH`, `CONDUCTOR_PORT`, `CONDUCTOR_BIN_DIR`
+
+### Conductor workspace structure
+
+- `~/conductor/repos/<repo>/` — Main git repos (source of truth)
+- `~/conductor/workspaces/<project>/<worktree>/` — Active git worktrees where agents work
+- `~/conductor/archived-contexts/` — Old/completed worktree contexts
+- `.context/` directory in each workspace (gitignored) for cross-agent collaboration
+
+### conductor.json
+
+Conductor supports three lifecycle scripts: `setup`, `run`, `archive`.
 
 ## Tech Stack
 
@@ -116,5 +142,196 @@ For any project path, the scanner discovers and returns:
 - Scanned items have scope levels: `global`, `local`, `custom`
 - Deduplication prevents the same skill/hook from appearing multiple times
 
+# SKILLS & MCP Servers
 
-@/Users/kushbhuwalka/.claude/GLOBAL-SKILLS.md
+## 
+
+&lt;SUPER_IMPORTANT&gt; If there's even a 1% chance a skill / mcp server / tool is relevant, use it. &lt;/SUPER IMPORTANT&gt;
+
+## How to Access Skills
+
+Use the `Skill` tool. When you invoke a skill, its content is loaded and presented to you—follow it directly. Never use the Read tool on skill files. For all the skills we show here, I will mention their name & description. The description will tell you what it does and when to use it.
+
+# 
+
+# MCP SERVERS & SKILLS
+
+### Nia MCP Server
+
+Nia is an MCP-based knowledge agent available in sessions. It is the best way to search through **external** docs and information. Use it for:
+
+- **Indexing repos/docs**: `mcp__nia__index` to index GitHub repos, documentation sites, papers
+- **Searching indexed sources**: `mcp__nia__search` for semantic search, `mcp__nia__nia_grep` for regex
+- **Reading indexed content**: `mcp__nia__nia_read` to read files from indexed repos/docs
+- **Exploring structure**: `mcp__nia__nia_explore` for file trees
+- **Always check Nia first** before using WebFetch or WebSearch — indexed sources provide full, structured content
+
+You can invoke nia through the mcp server
+
+# AGENT RUNS (very very useful)
+
+You must run the code-simplifier agent whenever possible. It will clean up and make everything more readable & maintainable..
+
+# BROWSER-USE
+
+\
+We have 2 browser use tools - **expect-cli** and **agent-browser**. Don't ever use any other tool & don't ever write playwright for browser use. If these tools aren't loading, tell the user.
+
+### Expect-CLI Skill for QA
+
+```
+After any browser-facing change, run `expect-cli` to adversarially test it. Use this over raw browser tools for verifying UI changes / QA testing in the browser.
+
+Invoke this tool
+
+Note: This is NOT the Unix `expect` command. This is `expect-cli` from npm — an adversarial browser testing tool.
+```
+
+### Agent Browser Skill for Website Nav
+
+**agent-browser**
+
+This is your go-to tool for any other interaction with the browser / web outside of QA. This includes finding information, scraping, etc. This is a full-blown browser automation CLI. Think Puppeteer/Playwright but as shell commands. It’s for **doing things** in a browser — scraping, form filling, auth flows, data extraction, visual regression, etc. It’s a general-purpose browser robot
+
+```
+For browser verification of code changes → expect-cli
+For browser automation tasks (scraping, form filling, navigation) / other tasks → agent-browser
+```
+
+# SUPERPOWER-SKILLS (swiss army knife of skills)
+
+## Skill Priority
+
+When multiple skills could apply, use this order:
+
+1. **Process skills first** (brainstorming, debugging) - these determine HOW to approach the task
+2. **Implementation skills second** (frontend-design, mcp-builder) - these guide execution
+
+"Let's build X" → brainstorming first, then implementation skills. "Fix this bug" → debugging first, then domain-specific skills.
+
+## Skill Types
+
+**Rigid** (TDD, debugging): Follow exactly. Don't adapt away discipline.
+
+**Flexible** (patterns): Adapt principles to context.
+
+The skill itself tells you which.
+
+## List of Superpowers
+
+```
+name: brainstorming
+description: "You MUST use this before any creative work - creating features, building components, adding functionality, or modifying behavior. Explores user intent, requirements and design before implementation."
+```
+
+```
+name: dispatching-parallel-agents
+description: Use when facing 2+ independent tasks that can be worked on without shared state or sequential dependencies
+```
+
+```
+name: executing-plans
+description: Use when you have a written implementation plan to execute in a separate session with review checkpoints
+```
+
+```
+name: finishing-a-development-branch
+description: Use when implementation is complete, all tests pass, and you need to decide how to integrate the work - guides completion of development work by presenting structured options for merge, PR, or cleanup
+```
+
+```
+name: receiving-code-review
+description: Use when receiving code review feedback, before implementing suggestions, especially if feedback seems unclear or technically questionable - requires technical rigor and verification, not performative agreement or blind implementation
+```
+
+```
+name: writing plans
+description: Use when you have a spec or requirements for a multi-step task, before touching code
+```
+
+```
+name: test-driven-development
+description: Use when implementing any feature or bugfix, before writing implementation code
+```
+
+```
+name: systematic-debugging
+description: Use when encountering any bug, test failure, or unexpected behavior, before proposing fixes
+```
+
+```
+name: subagent-driven-development
+description: Use when executing implementation plans with independent tasks in the current session
+User Preferences
+```
+
+#
+
+# ALL OTHER SKILLS (very very useful)
+
+```
+name: find-skills
+description: You can use this if the user asks you to find a skill. Only download reputable skills
+```
+
+```
+name: skill-creator
+description: SUPER IMPORTANT - use when you are told to create a skill
+```
+
+```
+name: supabase-postgres-best-practices
+description: Use when anything about supabase is mentioned
+```
+
+```
+name: context-visualizer
+description: use when user asks about claude code configuration (i.e what skills do you have, what mcps do you have, what hooks, etc.) or when user mentions ccv.
+```
+
+```
+name: ccv
+description: use when user asks about claude code configuration (i.e what skills do you have, what mcps do you have, what hooks, etc.) or when user mentions ccv.
+```
+
+```
+name: feature-dev
+description: use when user asks about a new feature
+```
+
+## Vercel Skills
+
+```
+name: vercel-react-best-practices
+description: React and Next.js performance optimization guidelines from Vercel Engineering. Use when writing, reviewing, or refactoring React/Next.js code for optimal performance patterns — components, pages, data fetching, bundle optimization.
+```
+
+```
+name: building-components
+description: Guide for building modern, accessible, and composable UI components. Use when building new components, implementing accessibility, creating composable APIs, setting up design tokens, publishing to npm/registry, or writing component documentation.
+```
+
+```
+name: vercel-cli
+description: Deploy, manage, and develop projects on Vercel from the command line. Use for deployments, project linking, environment variables, and all Vercel platform operations.
+```
+
+```
+name: next-best-practices
+description: Next.js best practices - file conventions, RSC boundaries, data patterns, async APIs, metadata, error handling, route handlers, image/font optimization, bundling
+```
+
+```
+name: vercel-composition-patterns
+description: React composition patterns that scale. Use when refactoring components with boolean prop proliferation, building flexible component libraries, or designing reusable APIs. Includes React 19 API changes.
+```
+
+```
+name: vercel-composition-patterns
+description: React composition patterns that scale. Use when refactoring components with boolean prop proliferation, building flexible component libraries, or designing reusable APIs. Includes React 19 API changes.
+```
+
+```
+name: agnix
+description: Run for skill health and claude.md check. if user says 'agx', you should run this. 
+```
