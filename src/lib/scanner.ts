@@ -642,6 +642,84 @@ export async function scanContext(projectPath: string | null, customSources: str
   const globalClaudeDir = path.join(home, '.claude');
   markdownFiles.push(...await collectMdFiles(globalClaudeDir, 'global', globalClaudeDir));
 
+  // 0. Managed Settings (system-level, cannot be overridden by user/project)
+  // macOS: /Library/Application Support/ClaudeCode/
+  const managedSettingsDir = '/Library/Application Support/ClaudeCode';
+
+  // 0a. Managed Settings (base file)
+  const managedSettingsPath = path.join(managedSettingsDir, 'managed-settings.json');
+  const managedSettingsFound = await fileExists(managedSettingsPath);
+  sources.push({
+    scope: 'global',
+    name: 'Managed Settings',
+    path: managedSettingsPath,
+    found: managedSettingsFound,
+  });
+
+  if (managedSettingsFound) {
+    const managedSettings = await readJsonFile(managedSettingsPath) as Record<string, unknown> | null;
+    if (managedSettings?.hooks && typeof managedSettings.hooks === 'object') {
+      allHooks.push(...extractHooks(managedSettings.hooks as Record<string, unknown>, 'global', 'Managed Settings', managedSettingsPath));
+    }
+  }
+
+  // 0b. Managed Settings drop-in directory (managed-settings.d/*.json, merged alphabetically)
+  const managedDropInDir = path.join(managedSettingsDir, 'managed-settings.d');
+  const managedDropInFound = await fileExists(managedDropInDir);
+  if (managedDropInFound) {
+    try {
+      const entries = await fs.readdir(managedDropInDir);
+      const jsonFiles = entries
+        .filter((f: string) => f.endsWith('.json') && !f.startsWith('.'))
+        .sort();
+      for (const file of jsonFiles) {
+        const dropInPath = path.join(managedDropInDir, file);
+        sources.push({
+          scope: 'global',
+          name: `Managed Drop-in: ${file}`,
+          path: dropInPath,
+          found: true,
+        });
+        const dropInSettings = await readJsonFile(dropInPath) as Record<string, unknown> | null;
+        if (dropInSettings?.hooks && typeof dropInSettings.hooks === 'object') {
+          allHooks.push(...extractHooks(dropInSettings.hooks as Record<string, unknown>, 'global', `Managed Drop-in: ${file}`, dropInPath));
+        }
+      }
+    } catch {
+      // ignore read errors
+    }
+  }
+
+  // 0c. Managed MCP configuration
+  const managedMcpPath = path.join(managedSettingsDir, 'managed-mcp.json');
+  const managedMcpFound = await fileExists(managedMcpPath);
+  sources.push({
+    scope: 'global',
+    name: 'Managed MCP',
+    path: managedMcpPath,
+    found: managedMcpFound,
+  });
+
+  if (managedMcpFound) {
+    const managedMcp = await readJsonFile(managedMcpPath) as Record<string, unknown> | null;
+    if (managedMcp) {
+      const serversObj = (managedMcp.mcpServers as Record<string, Record<string, unknown>> | undefined) || managedMcp;
+      for (const [name, cfg] of Object.entries(serversObj)) {
+        if (name === 'mcpServers' || typeof cfg !== 'object' || cfg === null) continue;
+        const serverCfg = cfg as Record<string, unknown>;
+        mcpServers.push({
+          name,
+          scope: 'global',
+          source: 'Managed MCP',
+          sourcePath: managedMcpPath,
+          type: (serverCfg.type as string) || 'unknown',
+          url: serverCfg.url as string | undefined,
+          config: serverCfg,
+        });
+      }
+    }
+  }
+
   // 1. Global Settings (~/.claude/settings.json)
   const globalSettingsPath = path.join(home, '.claude', 'settings.json');
   const globalSettingsFound = await fileExists(globalSettingsPath);

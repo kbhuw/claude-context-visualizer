@@ -17,6 +17,7 @@ interface OverviewTabProps {
 }
 
 const sourceColors: Record<string, string> = {
+  'Managed': 'bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-100',
   'Global Settings': 'bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-100',
   'Client State': 'bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-100',
   'Plugin': 'bg-purple-50 text-purple-600 dark:bg-purple-950 dark:text-purple-100',
