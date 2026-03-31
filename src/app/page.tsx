@@ -193,6 +193,7 @@ export default function Home() {
                   plugins={context.plugins}
                   skills={context.skills}
                   hooks={context.hooks}
+                  agents={context.agents ?? []}
                   commands={context.commands ?? []}
                   onSelectItem={handleSelectItem}
                   sheetOpen={!!detailItem}
@@ -258,6 +259,8 @@ export default function Home() {
             found = context.hooks.find(h => h.name === navItem.name) as unknown as Record<string, unknown>;
           } else if (navType === 'mcpServer') {
             found = context.mcpServers.find(s => s.name === navItem.name) as unknown as Record<string, unknown>;
+          } else if (navType === 'agent') {
+            found = context.agents?.find(a => a.name === navItem.name) as unknown as Record<string, unknown>;
           } else if (navType === 'command') {
             found = context.commands?.find(c => c.name === navItem.name) as unknown as Record<string, unknown>;
           }

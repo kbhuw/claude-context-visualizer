@@ -312,6 +312,10 @@ export default function DetailPanel({ item, type, onClose, onNavigate, context, 
   const hookMatcher = item?.matcher as string | undefined;
   const hookCommand = item?.command as string | undefined;
 
+  // Agent-specific
+  const isAgent = type === 'agent';
+  const agentModel = item?.model as string | undefined;
+
   // MCP server config
   const isMcpServer = type === 'mcpServer';
   const serverConfig = item?.config as Record<string, unknown> | undefined;
@@ -348,7 +352,7 @@ export default function DetailPanel({ item, type, onClose, onNavigate, context, 
     // Source items aren't removable
     if (type === 'source') return false;
     // Supported types
-    return ['plugin', 'mcpServer', 'skill', 'hook', 'command'].includes(type);
+    return ['plugin', 'mcpServer', 'skill', 'hook', 'command', 'agent'].includes(type);
   })();
 
   const handleRemove = async () => {
@@ -358,7 +362,7 @@ export default function DetailPanel({ item, type, onClose, onNavigate, context, 
       const body: Record<string, string> = { type, name };
       if (type === 'mcpServer') {
         body.sourcePath = (item.sourcePath as string) || '';
-      } else if (type === 'skill' || type === 'command') {
+      } else if (type === 'skill' || type === 'command' || type === 'agent') {
         body.filePath = (item.filePath as string) || '';
       } else if (type === 'hook') {
         body.event = (item.event as string) || (item.name as string) || '';
@@ -621,6 +625,39 @@ export default function DetailPanel({ item, type, onClose, onNavigate, context, 
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Agent Configuration */}
+          {isAgent && (
+            <div className="px-5 py-4 border-b border-border space-y-2">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Agent Configuration
+              </h3>
+              <div className="space-y-1.5">
+                {agentModel && (
+                  <div className="flex items-start gap-2">
+                    <span className="text-[11px] text-muted-foreground w-16 flex-shrink-0">Model</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-100">
+                      {agentModel}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-start gap-2">
+                  <span className="text-[11px] text-muted-foreground w-16 flex-shrink-0">Plugin</span>
+                  <span className="text-sm text-foreground">{item?.source as string}</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-[11px] text-muted-foreground w-16 flex-shrink-0">Scope</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase ${
+                    scope === 'global'
+                      ? 'bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-100'
+                      : 'bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-100'
+                  }`}>
+                    {scope}
+                  </span>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1025,6 +1062,7 @@ export default function DetailPanel({ item, type, onClose, onNavigate, context, 
               {type === 'command' && 'This will delete the command file(s).'}
               {type === 'hook' && 'This will remove the hook from its settings file.'}
               {type === 'mcpServer' && 'This will remove the server from its config file.'}
+              {type === 'agent' && 'This will delete the agent file from the plugin.'}
             </p>
           </div>
           <div className="flex justify-end gap-2">

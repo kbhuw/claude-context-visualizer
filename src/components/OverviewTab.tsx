@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import type { McpServer, Plugin, Skill, Hook } from '@/lib/types';
+import type { McpServer, Plugin, Skill, Hook, Agent } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { ChevronDown, ChevronRight, X, Pencil } from 'lucide-react';
 
@@ -10,6 +10,7 @@ interface OverviewTabProps {
   plugins: Plugin[];
   skills: Skill[];
   hooks: Hook[];
+  agents: Agent[];
   commands: { name: string; scope: 'global' | 'local'; source: string; description?: string; filePath: string }[];
   onSelectItem: (type: string, item: Record<string, unknown>) => void;
   onEditSkill?: (filePath: string) => void;
@@ -642,6 +643,74 @@ function HooksCard({
   );
 }
 
+function AgentsCard({
+  agents,
+  onSelectItem,
+}: {
+  agents: Agent[];
+  onSelectItem: (type: string, item: Record<string, unknown>) => void;
+}) {
+  // Group agents by plugin source
+  const groups = new Map<string, Agent[]>();
+  for (const agent of agents) {
+    const key = agent.source;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(agent);
+  }
+
+  return (
+    <div className="bg-card border border-border rounded-lg p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="w-2 h-2 rounded-full bg-indigo-500" />
+        <h3 className="text-sm font-semibold text-foreground">Agents</h3>
+        <span className="text-xs text-muted-foreground">{agents.length}</span>
+      </div>
+      <div className="space-y-3 max-h-72 overflow-y-auto">
+        {agents.length === 0 && (
+          <p className="text-xs text-muted-foreground italic">None configured</p>
+        )}
+        {Array.from(groups.entries()).map(([groupName, groupAgents]) => (
+          <div key={groupName}>
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-indigo-500 mb-1.5 flex items-center gap-1.5">
+              {groupName}
+              <span className="text-muted-foreground font-normal">({groupAgents.length})</span>
+            </div>
+            <div className="space-y-1">
+              {groupAgents.map((agent, i) => (
+                <button
+                  key={`${agent.name}-${i}`}
+                  onClick={() => onSelectItem('agent', agent as unknown as Record<string, unknown>)}
+                  className="w-full flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-md hover:bg-accent transition-colors duration-150 text-left"
+                >
+                  <div className="min-w-0 flex-1">
+                    <span className="text-foreground truncate block">{agent.name}</span>
+                    {agent.description && (
+                      <span className="text-[10px] text-muted-foreground truncate block">{agent.description}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {agent.model && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-100">
+                        {agent.model}
+                      </span>
+                    )}
+                    <Badge className={agent.scope === 'local'
+                      ? 'bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-100'
+                      : 'bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-100'
+                    }>
+                      {agent.scope}
+                    </Badge>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 type ScopeFilter = 'all' | 'global' | 'local';
 
 function ScopeFilterBar({ value, onChange }: { value: ScopeFilter; onChange: (v: ScopeFilter) => void }) {
@@ -679,6 +748,7 @@ export default function OverviewTab({
   plugins,
   skills,
   hooks,
+  agents,
   commands,
   onSelectItem,
   sheetOpen,
@@ -692,6 +762,7 @@ export default function OverviewTab({
   const filteredPlugins = useMemo(() => filterByScope(plugins, scopeFilter), [plugins, scopeFilter]);
   const filteredSkills = useMemo(() => filterByScope(skills, scopeFilter), [skills, scopeFilter]);
   const filteredHooks = useMemo(() => filterByScope(hooks, scopeFilter), [hooks, scopeFilter]);
+  const filteredAgents = useMemo(() => filterByScope(agents, scopeFilter), [agents, scopeFilter]);
   const filteredCommands = useMemo(() => filterByScope(commands, scopeFilter), [commands, scopeFilter]);
 
   const sections: CardSection[] = [
@@ -728,8 +799,11 @@ export default function OverviewTab({
           <OverviewCard key={section.title} section={section} onSelectItem={onSelectItem} />
         ))}
         <HooksCard hooks={filteredHooks} onSelectItem={onSelectItem} />
+        <SkillsCard skills={filteredSkills} onSelectItem={onSelectItem} sheetOpen={!!sheetOpen} onModalChange={onSkillsModalChange} onCloseSheet={onCloseSheet} onEditSkill={onEditSkill} />
+        {filteredAgents.length > 0 && (
+          <AgentsCard agents={filteredAgents} onSelectItem={onSelectItem} />
+        )}
       </div>
-      <SkillsCard skills={filteredSkills} onSelectItem={onSelectItem} sheetOpen={!!sheetOpen} onModalChange={onSkillsModalChange} onCloseSheet={onCloseSheet} onEditSkill={onEditSkill} />
     </div>
   );
 }

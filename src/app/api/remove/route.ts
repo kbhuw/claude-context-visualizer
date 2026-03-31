@@ -276,6 +276,12 @@ export async function DELETE(req: NextRequest) {
         break;
       }
 
+      case 'agent': {
+        const { filePath } = body;
+        await removeFileOrDir(filePath);
+        break;
+      }
+
       default:
         return NextResponse.json({ error: `Unknown type: ${type}` }, { status: 400 });
     }
