@@ -398,7 +398,7 @@ function SkillsCard({
               key={groupName}
               groupName={groupName}
               skills={groupSkills}
-              defaultExpanded={false}
+              defaultExpanded={true}
               metric={metric}
               onSelectItem={onSelectItem}
               onEditSkill={onEditSkill}
