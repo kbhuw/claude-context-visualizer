@@ -306,6 +306,43 @@ export default function DetailPanel({ item, type, onClose, onNavigate, context, 
   const pluginMcpServers = (item?.mcpServers as string[]) || [];
   const isPlugin = type === 'plugin';
 
+  // Source-specific: gather items that belong to this source
+  const isSource = type === 'source';
+  const sourceItems = isSource && context ? (() => {
+    const sourceName = name;
+    const sourcePath = (item?.path as string) || '';
+    const items: { type: string; name: string; obj: Record<string, unknown> }[] = [];
+    // Match skills by source name
+    for (const s of context.skills) {
+      if (s.source === sourceName) items.push({ type: 'skill', name: s.name, obj: s as unknown as Record<string, unknown> });
+    }
+    // Match hooks by source name
+    for (const h of context.hooks) {
+      if (h.source === sourceName) items.push({ type: 'hook', name: h.name, obj: h as unknown as Record<string, unknown> });
+    }
+    // Match MCP servers by source name
+    for (const m of context.mcpServers) {
+      if (m.source === sourceName) items.push({ type: 'mcpServer', name: m.name, obj: m as unknown as Record<string, unknown> });
+    }
+    // Match commands by source name
+    for (const c of (context.commands ?? [])) {
+      if (c.source === sourceName) items.push({ type: 'command', name: c.name, obj: c as unknown as Record<string, unknown> });
+    }
+    // Match agents by source name
+    for (const a of (context.agents ?? [])) {
+      if (a.source === sourceName) items.push({ type: 'agent', name: a.name, obj: a as unknown as Record<string, unknown> });
+    }
+    // Match markdown files by path prefix (for directory sources like Auto Memory)
+    if (sourcePath) {
+      for (const md of context.markdownFiles) {
+        if (md.path.startsWith(sourcePath + '/') || md.path === sourcePath) {
+          items.push({ type: 'markdown', name: md.name, obj: { name: md.name, path: md.path, scope: md.scope, relativePath: md.relativePath } as unknown as Record<string, unknown> });
+        }
+      }
+    }
+    return items;
+  })() : [];
+
   // Hook-specific
   const isHook = type === 'hook';
   const hookEvent = item?.event as string | undefined;
@@ -463,6 +500,11 @@ export default function DetailPanel({ item, type, onClose, onNavigate, context, 
               <p className="text-sm text-muted-foreground">{description}</p>
             )}
 
+            {/* Source path */}
+            {isSource && filePath && (
+              <p className="text-xs font-mono text-muted-foreground break-all">{filePath}</p>
+            )}
+
             {/* Stats (non-plugin) */}
             {!isPlugin && (lineCount !== null || tokenCount !== null) && (
               <div className="flex items-center gap-2 flex-wrap">
@@ -471,6 +513,49 @@ export default function DetailPanel({ item, type, onClose, onNavigate, context, 
               </div>
             )}
           </div>
+
+          {/* Source items - show items that belong to this source */}
+          {isSource && sourceItems.length > 0 && (
+            <div className="px-5 py-4 border-b border-border space-y-2">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Contents ({sourceItems.length})
+              </h3>
+              <div className="space-y-1">
+                {sourceItems.map((si) => (
+                  <button
+                    key={`${si.type}-${si.name}`}
+                    onClick={() => {
+                      if (si.type === 'markdown') {
+                        // For markdowns, open as a source with file path
+                        onNavigate?.('source', { name: si.name, path: (si.obj as Record<string, unknown>).path, scope: (si.obj as Record<string, unknown>).scope, found: true });
+                      } else {
+                        onNavigate?.(si.type, si.obj);
+                      }
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md bg-accent/50 border border-border text-sm hover:bg-accent transition-colors text-left"
+                  >
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase flex-shrink-0 ${
+                      si.type === 'skill' ? 'bg-pink-50 text-pink-600 dark:bg-pink-950 dark:text-pink-100'
+                        : si.type === 'hook' ? 'bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-100'
+                        : si.type === 'mcpServer' ? 'bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-100'
+                        : si.type === 'markdown' ? 'bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-100'
+                        : 'bg-secondary text-muted-foreground'
+                    }`}>
+                      {si.type === 'mcpServer' ? 'mcp' : si.type === 'markdown' ? 'md' : si.type}
+                    </span>
+                    <span className="text-foreground font-medium truncate">{si.name}</span>
+                    <ChevronRight className="w-3 h-3 text-muted-foreground ml-auto flex-shrink-0" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {isSource && sourceItems.length === 0 && !loadingFile && !fileContent && (
+            <div className="px-5 py-8 text-center text-sm text-muted-foreground">
+              {item?.found ? 'No items found in this source.' : 'This source was not found on disk.'}
+            </div>
+          )}
 
           {/* MCP Server details */}
           {isMcpServer && serverConfig && (
