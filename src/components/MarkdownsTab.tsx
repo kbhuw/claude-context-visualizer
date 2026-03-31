@@ -203,11 +203,13 @@ export default function MarkdownsTab({ markdownFiles, extraMdDirs, onAddMdDir, o
     'GLOBAL-SKILLS.MD',
     'AGENTS.MD',
     'PUFFLE-APP-PERSONAL-CLAUDE.MD',
+    'MEMORY.MD',
   ]);
 
   const isCritical = (file: MarkdownFile) =>
     CRITICAL_NAMES.has(file.name.toUpperCase()) ||
-    file.name.toUpperCase().includes('OVERRIDE');
+    file.name.toUpperCase().includes('OVERRIDE') ||
+    file.path.includes('/memory/');
 
   // Order critical files in the defined priority
   const criticalOrder = (file: MarkdownFile): number => {
@@ -348,7 +350,7 @@ export default function MarkdownsTab({ markdownFiles, extraMdDirs, onAddMdDir, o
     onOpenFileHandled?.();
   }, [openFilePath]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function FileListItem({ file, isActive }: { file: MarkdownFile; isActive: boolean }) {
+  function FileListItem({ file, isActive, showScopeDot }: { file: MarkdownFile; isActive: boolean; showScopeDot?: boolean }) {
     return (
       <button
         type="button"
@@ -365,12 +367,18 @@ export default function MarkdownsTab({ markdownFiles, extraMdDirs, onAddMdDir, o
         title={`Click to open • Right-click to open in split`}
       >
         <FileText size={13} className="flex-shrink-0 opacity-60" />
-        <span className="truncate">{file.relativePath}</span>
+        <span className="truncate">{showScopeDot ? file.name : file.relativePath}</span>
+        {showScopeDot && (
+          <span
+            className={`flex-shrink-0 w-2 h-2 rounded-full ${file.scope === 'local' ? 'bg-green-500' : 'bg-blue-500'}`}
+            title={file.scope === 'local' ? 'Local' : 'Global'}
+          />
+        )}
       </button>
     );
   }
 
-  function FileGroup({ label, files, color }: { label: string; files: MarkdownFile[]; color: string }) {
+  function FileGroup({ label, files, color, showScopeDots }: { label: string; files: MarkdownFile[]; color: string; showScopeDots?: boolean }) {
     if (files.length === 0) return null;
     return (
       <div className="mb-3">
@@ -385,6 +393,7 @@ export default function MarkdownsTab({ markdownFiles, extraMdDirs, onAddMdDir, o
               isActive={
                 leftPane.file?.path === file.path || rightPane.file?.path === file.path
               }
+              showScopeDot={showScopeDots}
             />
           ))}
         </div>
@@ -506,7 +515,7 @@ export default function MarkdownsTab({ markdownFiles, extraMdDirs, onAddMdDir, o
 
           {/* File list */}
           <div className="flex-1 overflow-auto py-2 px-1">
-            <FileGroup label="Critical" files={criticalFiles} color="text-amber-500" />
+            <FileGroup label="Critical" files={criticalFiles} color="text-amber-500" showScopeDots />
             <FileGroup label="Local" files={localFiles} color="text-green-500" />
             <FileGroup label="Global" files={globalFiles} color="text-blue-500" />
             {filteredFiles.length === 0 && (

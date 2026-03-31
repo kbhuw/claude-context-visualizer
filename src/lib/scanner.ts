@@ -92,7 +92,11 @@ async function resolveIncludes(content: string, baseDir: string, depth = 0): Pro
     // Match lines that are just @filepath (with optional leading whitespace)
     const match = trimmed.match(/^@(.+)$/);
     if (match) {
-      const includePath = path.resolve(baseDir, match[1]);
+      let rawPath = match[1];
+      if (rawPath.startsWith('~/') || rawPath === '~') {
+        rawPath = path.join(os.homedir(), rawPath.slice(1));
+      }
+      const includePath = path.resolve(baseDir, rawPath);
       try {
         const includeContent = await fs.readFile(includePath, 'utf-8');
         const includeDir = path.dirname(includePath);
@@ -564,6 +568,28 @@ async function collectMdFilesRecursive(
 /** Convert a project path to the slug format used in ~/.claude/projects/ */
 function projectPathToSlug(projectPath: string): string {
   return projectPath.replace(/\//g, '-');
+}
+
+/** Resolve a worktree's main repo path by reading the .git file. Returns null if not a worktree. */
+async function resolveMainRepoPath(worktreePath: string): Promise<string | null> {
+  try {
+    const gitPath = path.join(worktreePath, '.git');
+    const stat = await fs.stat(gitPath);
+    if (stat.isFile()) {
+      const content = (await fs.readFile(gitPath, 'utf-8')).trim();
+      const match = content.match(/^gitdir:\s*(.+)$/);
+      if (match) {
+        const gitdir = match[1];
+        const worktreesIdx = gitdir.indexOf('/.git/worktrees/');
+        if (worktreesIdx !== -1) {
+          return gitdir.substring(0, worktreesIdx);
+        }
+      }
+    }
+  } catch {
+    // not a worktree or unreadable
+  }
+  return null;
 }
 
 /** Extract built-in skill names from the Claude Code binary using `strings` */
@@ -1177,6 +1203,24 @@ export async function scanContext(projectPath: string | null, customSources: str
 
     if (memoryDirFound) {
       markdownFiles.push(...await collectMdFilesRecursive(memoryDir, 'local', projectPath));
+    }
+
+    // 12b. If this is a worktree, also check the main repo's memory directory
+    const mainRepoPath = await resolveMainRepoPath(projectPath);
+    if (mainRepoPath && mainRepoPath !== projectPath) {
+      const mainSlug = projectPathToSlug(mainRepoPath);
+      const mainMemoryDir = path.join(home, '.claude', 'projects', mainSlug, 'memory');
+      const mainMemoryFound = await fileExists(mainMemoryDir);
+      sources.push({
+        scope: 'local',
+        name: 'Auto Memory (Main Repo)',
+        path: mainMemoryDir,
+        found: mainMemoryFound,
+      });
+
+      if (mainMemoryFound) {
+        markdownFiles.push(...await collectMdFilesRecursive(mainMemoryDir, 'local', mainRepoPath));
+      }
     }
 
     // Collect local .md files from project root, .claude/, docs/, .skills/
