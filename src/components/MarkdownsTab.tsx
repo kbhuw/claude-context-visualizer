@@ -361,6 +361,7 @@ export default function MarkdownsTab({ markdownFiles, extraMdDirs, onAddMdDir, o
 
   const categoryIcons: Record<string, { icon: typeof FileText; color: string }> = {
     Critical: { icon: Shield, color: 'text-amber-500' },
+    'Worktree Parent': { icon: GitBranch, color: 'text-teal-500' },
     Rules: { icon: Scale, color: 'text-violet-500' },
     Skills: { icon: Wand2, color: 'text-cyan-500' },
     Commands: { icon: Terminal, color: 'text-emerald-500' },
@@ -401,6 +402,7 @@ export default function MarkdownsTab({ markdownFiles, extraMdDirs, onAddMdDir, o
   /** Categorize a file by its path into a subgroup */
   function getFileCategory(file: MarkdownFile): string {
     const rp = file.relativePath.toLowerCase();
+    if (rp.startsWith('worktree-parent/')) return 'Worktree Parent';
     if (rp.includes('skills/') || rp.includes('.skills/')) return 'Skills';
     if (rp.includes('commands/')) return 'Commands';
     if (rp.includes('memory/')) return 'Memory';
@@ -411,6 +413,12 @@ export default function MarkdownsTab({ markdownFiles, extraMdDirs, onAddMdDir, o
   /** Shorten relativePath to just the category prefix + filename */
   function getShortDisplayPath(file: MarkdownFile): string {
     const rp = file.relativePath;
+    // Worktree parent files: show the parent directory name
+    if (rp.startsWith('worktree-parent/')) {
+      const parts = file.path.split('/');
+      const dirName = parts[parts.length - 2] || '';
+      return `${dirName}/CLAUDE.md`;
+    }
     // Match known directory segments and return from that point
     const patterns = [/(?:\.?skills\/)/, /commands\//, /memory\//, /docs\//];
     for (const pat of patterns) {
@@ -460,7 +468,7 @@ export default function MarkdownsTab({ markdownFiles, extraMdDirs, onAddMdDir, o
     }
 
     // Stable ordering for categories
-    const categoryOrder = ['Rules', 'Skills', 'Commands', 'Memory', 'Docs'];
+    const categoryOrder = ['Worktree Parent', 'Rules', 'Skills', 'Commands', 'Memory', 'Docs'];
     const sortedCategories = categoryOrder.filter((c) => groups.has(c));
 
     return (

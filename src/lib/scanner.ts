@@ -1055,30 +1055,73 @@ export async function scanContext(projectPath: string | null, customSources: str
       }
     }
 
-    // 6b. Worktree parent CLAUDE.md — if this is a worktree, check the parent directory for a sibling CLAUDE.md
-    const mainRepoForClaudeMd = await resolveMainRepoPath(projectPath);
-    if (mainRepoForClaudeMd) {
-      const parentDir = path.dirname(projectPath);
-      const parentClaudeMdPath = path.join(parentDir, 'CLAUDE.md');
-      const parentClaudeMdFound = await fileExists(parentClaudeMdPath);
+    // 6b. Worktree parent CLAUDE.md — check multiple locations for inherited CLAUDE.md
+    // For git worktrees: check the main repo's CLAUDE.md (Claude Code follows .git symlink)
+    // For Conductor workspaces: also check the parent directory (~/conductor/workspaces/<project>/CLAUDE.md)
+    const mainRepoPath = await resolveMainRepoPath(projectPath);
+    const parentDir = path.dirname(projectPath);
+    const isConductorWorkspace = parentDir.includes('/conductor/workspaces/');
+
+    // Check main repo CLAUDE.md (for git worktrees)
+    if (mainRepoPath) {
+      const mainRepoClaudeMdPath = path.join(mainRepoPath, 'CLAUDE.md');
+      const mainRepoClaudeMdFound = await fileExists(mainRepoClaudeMdPath);
       sources.push({
         scope: 'local',
-        name: 'Worktree Parent CLAUDE.md',
-        path: parentClaudeMdPath,
-        found: parentClaudeMdFound,
+        name: 'Main Repo CLAUDE.md',
+        path: mainRepoClaudeMdPath,
+        found: mainRepoClaudeMdFound,
       });
 
-      if (parentClaudeMdFound) {
+      if (mainRepoClaudeMdFound) {
         try {
-          const rawParent = await fs.readFile(parentClaudeMdPath, 'utf-8');
-          const resolvedParent = await resolveIncludes(rawParent, parentDir);
+          const rawMainRepo = await fs.readFile(mainRepoClaudeMdPath, 'utf-8');
+          const resolvedMainRepo = await resolveIncludes(rawMainRepo, mainRepoPath);
           if (claudeMd) {
-            claudeMd = resolvedParent + '\n\n' + claudeMd;
+            claudeMd = resolvedMainRepo + '\n\n' + claudeMd;
           } else {
-            claudeMd = resolvedParent;
+            claudeMd = resolvedMainRepo;
           }
         } catch {
           // ignore read errors
+        }
+        // Main repo CLAUDE.md is included in the resolved claudeMd content
+        // but not shown separately in the sidebar — only workspace parent is shown
+      }
+    }
+
+    // Check conductor workspace parent CLAUDE.md (~/conductor/workspaces/<project>/CLAUDE.md)
+    if (isConductorWorkspace || mainRepoPath) {
+      const parentClaudeMdPath = path.join(parentDir, 'CLAUDE.md');
+      // Skip if it's the same path as the main repo CLAUDE.md we already checked
+      if (!mainRepoPath || parentClaudeMdPath !== path.join(mainRepoPath, 'CLAUDE.md')) {
+        const parentClaudeMdFound = await fileExists(parentClaudeMdPath);
+        sources.push({
+          scope: 'local',
+          name: 'Worktree Parent CLAUDE.md',
+          path: parentClaudeMdPath,
+          found: parentClaudeMdFound,
+        });
+
+        if (parentClaudeMdFound) {
+          try {
+            const rawParent = await fs.readFile(parentClaudeMdPath, 'utf-8');
+            const resolvedParent = await resolveIncludes(rawParent, parentDir);
+            if (claudeMd) {
+              claudeMd = resolvedParent + '\n\n' + claudeMd;
+            } else {
+              claudeMd = resolvedParent;
+            }
+          } catch {
+            // ignore read errors
+          }
+          // Add to markdownFiles so it shows in the sidebar as "Worktree Parent"
+          markdownFiles.push({
+            path: parentClaudeMdPath,
+            name: 'CLAUDE.md',
+            scope: 'local',
+            relativePath: `worktree-parent/CLAUDE.md`,
+          });
         }
       }
     }
@@ -1234,9 +1277,9 @@ export async function scanContext(projectPath: string | null, customSources: str
     }
 
     // 12b. If this is a worktree, also check the main repo's memory directory
-    const mainRepoPath = await resolveMainRepoPath(projectPath);
-    if (mainRepoPath && mainRepoPath !== projectPath) {
-      const mainSlug = projectPathToSlug(mainRepoPath);
+    const mainRepoPathForMemory = mainRepoPath ?? await resolveMainRepoPath(projectPath);
+    if (mainRepoPathForMemory && mainRepoPathForMemory !== projectPath) {
+      const mainSlug = projectPathToSlug(mainRepoPathForMemory);
       const mainMemoryDir = path.join(home, '.claude', 'projects', mainSlug, 'memory');
       const mainMemoryFound = await fileExists(mainMemoryDir);
       sources.push({
@@ -1247,7 +1290,7 @@ export async function scanContext(projectPath: string | null, customSources: str
       });
 
       if (mainMemoryFound) {
-        markdownFiles.push(...await collectMdFilesRecursive(mainMemoryDir, 'local', mainRepoPath));
+        markdownFiles.push(...await collectMdFilesRecursive(mainMemoryDir, 'local', mainRepoPathForMemory));
       }
     }
 
