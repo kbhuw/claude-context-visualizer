@@ -98,8 +98,33 @@ export default function MarkdownsTab({ markdownFiles, extraMdDirs, onAddMdDir, o
     return true;
   });
 
-  const globalFiles = filteredFiles.filter((f) => f.scope === 'global');
-  const localFiles = filteredFiles.filter((f) => f.scope === 'local');
+  // Critical files shown in their own top section, matched by name (case-insensitive)
+  const CRITICAL_NAMES = new Set([
+    'CLAUDE.MD',
+    'GLOBAL-CLAUDE.MD',
+    'GLOBAL-SKILLS.MD',
+    'AGENTS.MD',
+    'PUFFLE-APP-PERSONAL-CLAUDE.MD',
+  ]);
+
+  const isCritical = (file: MarkdownFile) =>
+    CRITICAL_NAMES.has(file.name.toUpperCase()) ||
+    file.name.toUpperCase().includes('OVERRIDE');
+
+  // Order critical files in the defined priority
+  const criticalOrder = (file: MarkdownFile): number => {
+    const name = file.name.toUpperCase();
+    const order = [...CRITICAL_NAMES];
+    const idx = order.indexOf(name);
+    return idx >= 0 ? idx : order.length;
+  };
+
+  const criticalFiles = [...filteredFiles]
+    .filter(isCritical)
+    .sort((a, b) => criticalOrder(a) - criticalOrder(b));
+
+  const globalFiles = filteredFiles.filter((f) => f.scope === 'global' && !isCritical(f));
+  const localFiles = filteredFiles.filter((f) => f.scope === 'local' && !isCritical(f));
 
   const updateUrlParams = useCallback((left: MarkdownFile | null, right: MarkdownFile | null) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -182,7 +207,11 @@ export default function MarkdownsTab({ markdownFiles, extraMdDirs, onAddMdDir, o
     if (leftFile) {
       loadFileContent(leftFile).then((content) => setLeftPane({ file: leftFile, content }));
     } else if (markdownFiles.length > 0) {
-      const first = markdownFiles[0];
+      // Prefer critical files as default (CLAUDE.md first), then first local, then first file
+      const criticalDefault = markdownFiles
+        .filter(isCritical)
+        .sort((a, b) => criticalOrder(a) - criticalOrder(b))[0];
+      const first = criticalDefault || markdownFiles.find((f) => f.scope === 'local') || markdownFiles[0];
       loadFileContent(first).then((content) => setLeftPane({ file: first, content }));
     }
 
@@ -464,8 +493,9 @@ export default function MarkdownsTab({ markdownFiles, extraMdDirs, onAddMdDir, o
 
           {/* File list */}
           <div className="flex-1 overflow-auto py-2 px-1">
-            <FileGroup label="Global" files={globalFiles} color="text-blue-500" />
+            <FileGroup label="Critical" files={criticalFiles} color="text-amber-500" />
             <FileGroup label="Local" files={localFiles} color="text-green-500" />
+            <FileGroup label="Global" files={globalFiles} color="text-blue-500" />
             {filteredFiles.length === 0 && (
               <div className="text-center text-muted-foreground text-[12px] py-8">
                 No .md files found
