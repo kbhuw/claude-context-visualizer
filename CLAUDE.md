@@ -1,8 +1,9 @@
 # Claude Context Visualizer
 
-A web-based inspection tool for Claude Code's configuration and runtime context. Scans and visualizes settings, MCP servers, plugins, skills, hooks, commands, and markdown documentation across global (~/.claude), project-local, and custom sources.
+A web-based inspection tool for Claude Code's configuration and runtime context. Scans and visualizes settings, MCP servers, plugins, skills, hooks, commands, and markdown documentation across global (\~/.claude), project-local, and custom sources.
 
-@AGENTS.md
+
+@/Users/kushbhuwalka/.claude/GLOBAL-CLAUDE.md
 
 ## Tech Stack
 
@@ -51,7 +52,7 @@ The app is designed to work with the Conductor workflow manager. Conductor organ
 - `~/conductor/workspaces/<project>/<worktree>/` — Active git worktrees where agents work. These always live here regardless of where the main repo is.
 - `~/conductor/archived-contexts/` — Old/completed worktree contexts.
 
-**Project discovery** (`/api/projects`): Scans `~/conductor/workspaces/` for worktrees, reads each worktree's `.git` file to resolve the main repo path (which may be in `conductor/repos/` or elsewhere), and groups everything into `ConductorProject` objects (name, mainRepo, worktrees[]). Also discovers projects from `~/.claude.json` and `~/.claude/projects/`.
+**Project discovery** (`/api/projects`): Scans `~/conductor/workspaces/` for worktrees, reads each worktree's `.git` file to resolve the main repo path (which may be in `conductor/repos/` or elsewhere), and groups everything into `ConductorProject` objects (name, mainRepo, worktrees\[\]). Also discovers projects from `~/.claude.json` and `~/.claude/projects/`.
 
 **Project selector UI** (`ProjectSelector.tsx`): Card-based picker with color-coded cards per conductor project. Clicking a project card expands a list showing the main repo and worktrees. Global View and Other (file picker) are separate cards. The app defaults to `~/conductor` on load.
 
@@ -92,31 +93,28 @@ bun run scan --introspect --server <name> -p <path> # Introspect one server
 
 ### API (dev server at :3000)
 
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| GET | `/api/projects` | All projects, conductor repos/worktrees, conductor dir |
-| GET | `/api/context?project=<path>` | Full scan (sources, MCP, plugins, skills, hooks, commands, CLAUDE.md, markdowns) |
-| GET | `/api/file?path=<path>` | Read any file (JSON secrets masked) |
-| POST | `/api/file` | Write .md files |
-| POST | `/api/mcp-introspect` | Live MCP server introspection (tools, resources, prompts) |
-| POST | `/api/browse` | macOS folder picker |
+MethodEndpointPurposeGET`/api/projects`All projects, conductor repos/worktrees, conductor dirGET`/api/context?project=<path>`Full scan (sources, MCP, plugins, skills, hooks, commands, CLAUDE.md, markdowns)GET`/api/file?path=<path>`Read any file (JSON secrets masked)POST`/api/file`Write .md filesPOST`/api/mcp-introspect`Live MCP server introspection (tools, resources, prompts)POST`/api/browse`macOS folder picker
 
 ### What the scanner extracts
 
 For any project path, the scanner discovers and returns:
+
 - **Sources**: 14 config file locations checked (global settings, client state, plugins, skills dirs, project settings, CLAUDE.md, .mcp.json, commands, shared settings, user project CLAUDE.md, auto-memory)
-- **MCP Servers**: from ~/.claude.json (global + per-project), .mcp.json, plugin configs
+- **MCP Servers**: from \~/.claude.json (global + per-project), .mcp.json, plugin configs
 - **Plugins**: name, version, install path, marketplace, and all sub-resources (skills, hooks, agents, commands, MCP servers)
-- **Skills**: from plugins, ~/.claude/skills/, ~/.agents/skills/, project skills dirs, commands-as-skills, built-in skills (extracted from Claude binary)
+- **Skills**: from plugins, \~/.claude/skills/, \~/.agents/skills/, project skills dirs, commands-as-skills, built-in skills (extracted from Claude binary)
 - **Hooks**: from global/local/shared settings, plugin hooks.json, session cache hooks — with event, command, matcher, resolved script paths
-- **Commands**: from ~/.claude/commands/ and project commands dirs, with YAML frontmatter metadata
+- **Commands**: from \~/.claude/commands/ and project commands dirs, with YAML frontmatter metadata
 - **CLAUDE.md**: fully resolved with @include directives expanded (recursive, 5 levels deep)
-- **Markdown files**: all .md files from ~/.claude/, project root, .claude/, docs/, .skills/, auto-memory
+- **Markdown files**: all .md files from \~/.claude/, project root, .claude/, docs/, .skills/, auto-memory
 
 ## Conventions
 
 - UI components use shadcn/ui patterns with Radix primitives
 - Skill/command metadata uses YAML frontmatter in .md files
-- Token estimation: ~1 token per 4 characters
+- Token estimation: \~1 token per 4 characters
 - Scanned items have scope levels: `global`, `local`, `custom`
 - Deduplication prevents the same skill/hook from appearing multiple times
+
+
+@/Users/kushbhuwalka/.claude/GLOBAL-SKILLS.md
