@@ -1055,6 +1055,34 @@ export async function scanContext(projectPath: string | null, customSources: str
       }
     }
 
+    // 6b. Worktree parent CLAUDE.md — if this is a worktree, check the parent directory for a sibling CLAUDE.md
+    const mainRepoForClaudeMd = await resolveMainRepoPath(projectPath);
+    if (mainRepoForClaudeMd) {
+      const parentDir = path.dirname(projectPath);
+      const parentClaudeMdPath = path.join(parentDir, 'CLAUDE.md');
+      const parentClaudeMdFound = await fileExists(parentClaudeMdPath);
+      sources.push({
+        scope: 'local',
+        name: 'Worktree Parent CLAUDE.md',
+        path: parentClaudeMdPath,
+        found: parentClaudeMdFound,
+      });
+
+      if (parentClaudeMdFound) {
+        try {
+          const rawParent = await fs.readFile(parentClaudeMdPath, 'utf-8');
+          const resolvedParent = await resolveIncludes(rawParent, parentDir);
+          if (claudeMd) {
+            claudeMd = resolvedParent + '\n\n' + claudeMd;
+          } else {
+            claudeMd = resolvedParent;
+          }
+        } catch {
+          // ignore read errors
+        }
+      }
+    }
+
     // 7. MCP Config (<project>/.mcp.json)
     const mcpConfigPath = path.join(projectPath, '.mcp.json');
     const mcpConfigFound = await fileExists(mcpConfigPath);
