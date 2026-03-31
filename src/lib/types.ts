@@ -59,6 +59,15 @@ export interface Hook {
   enrichedAt?: string;
 }
 
+export interface Agent {
+  name: string;
+  scope: 'global' | 'local';
+  source: string;
+  description?: string;
+  model?: string;
+  filePath: string;
+}
+
 export interface Command {
   name: string;
   scope: 'global' | 'local';
@@ -74,6 +83,7 @@ export interface ProjectContext {
   plugins: Plugin[];
   skills: Skill[];
   hooks: Hook[];
+  agents: Agent[];
   commands: Command[];
   claudeMd: string | null;
   markdownFiles: MarkdownFile[];

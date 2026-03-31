@@ -8,6 +8,7 @@ import {
   Plugin,
   Skill,
   Hook,
+  Agent,
   Command,
   MarkdownFile,
   ProjectContext,
@@ -38,13 +39,32 @@ function parseFrontmatter(content: string): Record<string, string> {
   const parts = content.split('---');
   if (parts.length < 3) return result;
   const frontmatter = parts[1].trim();
-  for (const line of frontmatter.split('\n')) {
+  const lines = frontmatter.split('\n');
+  let currentKey: string | null = null;
+  let currentValue = '';
+  let isMultiline = false;
+
+  for (const line of lines) {
     const colonIdx = line.indexOf(':');
-    if (colonIdx === -1) continue;
-    const key = line.slice(0, colonIdx).trim();
-    const value = line.slice(colonIdx + 1).trim();
-    result[key] = value;
+    // Check if this is a new key (not indented and has a colon)
+    if (colonIdx > 0 && !line.startsWith(' ') && !line.startsWith('\t')) {
+      // Save previous key if any
+      if (currentKey) result[currentKey] = currentValue.trim();
+      currentKey = line.slice(0, colonIdx).trim();
+      const rawValue = line.slice(colonIdx + 1).trim();
+      if (rawValue === '|' || rawValue === '>') {
+        isMultiline = true;
+        currentValue = '';
+      } else {
+        isMultiline = false;
+        currentValue = rawValue;
+      }
+    } else if (isMultiline && currentKey) {
+      // Continuation of a multiline value
+      currentValue += (currentValue ? ' ' : '') + line.trim();
+    }
   }
+  if (currentKey) result[currentKey] = currentValue.trim();
   return result;
 }
 
@@ -240,10 +260,10 @@ async function scanPluginDir(
   installPath: string,
   pluginName: string,
   scope: 'global' | 'local'
-): Promise<{ skills: Skill[]; hooks: Hook[]; agents: string[]; commands: Command[]; mcpServers: McpServer[] }> {
+): Promise<{ skills: Skill[]; hooks: Hook[]; agents: Agent[]; commands: Command[]; mcpServers: McpServer[] }> {
   const skills: Skill[] = [];
   const hooks: Hook[] = [];
-  const agents: string[] = [];
+  const agents: Agent[] = [];
   const commands: Command[] = [];
   const mcpServers: McpServer[] = [];
 
@@ -315,11 +335,43 @@ async function scanPluginDir(
   const agentEntries = await listDir(agentsDir);
   for (const entry of agentEntries) {
     try {
-      const stat = await fs.stat(path.join(agentsDir, entry));
-      if (stat.isDirectory()) {
-        agents.push(entry);
-      } else if (entry.endsWith('.md')) {
-        agents.push(entry.replace(/\.md$/, ''));
+      const entryPath = path.join(agentsDir, entry);
+      const stat = await fs.stat(entryPath);
+      if (stat.isFile() && entry.endsWith('.md')) {
+        const content = await fs.readFile(entryPath, 'utf-8');
+        const fm = parseFrontmatter(content);
+        agents.push({
+          name: fm.name || entry.replace(/\.md$/, ''),
+          scope,
+          source: pluginName,
+          description: fm.description,
+          model: fm.model,
+          filePath: entryPath,
+        });
+      } else if (stat.isDirectory()) {
+        // Agent as directory — look for an .md file inside
+        const subEntries = await listDir(entryPath);
+        const mdFile = subEntries.find(f => f.endsWith('.md'));
+        if (mdFile) {
+          const mdPath = path.join(entryPath, mdFile);
+          const content = await fs.readFile(mdPath, 'utf-8');
+          const fm = parseFrontmatter(content);
+          agents.push({
+            name: fm.name || entry,
+            scope,
+            source: pluginName,
+            description: fm.description,
+            model: fm.model,
+            filePath: mdPath,
+          });
+        } else {
+          agents.push({
+            name: entry,
+            scope,
+            source: pluginName,
+            filePath: entryPath,
+          });
+        }
       }
     } catch {
       // skip
@@ -581,6 +633,7 @@ export async function scanContext(projectPath: string | null, customSources: str
   const plugins: Plugin[] = [];
   const allSkills: Skill[] = [];
   const allHooks: Hook[] = [];
+  const allAgents: Agent[] = [];
   const allCommands: Command[] = [];
   let claudeMd: string | null = null;
   const markdownFiles: MarkdownFile[] = [];
@@ -721,6 +774,7 @@ export async function scanContext(projectPath: string | null, customSources: str
 
       allSkills.push(...scanned.skills);
       allHooks.push(...scanned.hooks);
+      allAgents.push(...scanned.agents);
       allCommands.push(...scanned.commands);
       mcpServers.push(...scanned.mcpServers);
 
@@ -733,7 +787,7 @@ export async function scanContext(projectPath: string | null, customSources: str
         marketplace,
         skills: scanned.skills.map(s => s.name),
         hooks: scanned.hooks.map(h => h.name),
-        agents: scanned.agents,
+        agents: scanned.agents.map(a => a.name),
         commands: scanned.commands.map(c => c.name),
         mcpServers: scanned.mcpServers.map(s => s.name),
       });
@@ -1164,6 +1218,7 @@ export async function scanContext(projectPath: string | null, customSources: str
     plugins,
     skills: allSkills,
     hooks: allHooks,
+    agents: allAgents,
     commands: allCommands,
     claudeMd,
     markdownFiles,
