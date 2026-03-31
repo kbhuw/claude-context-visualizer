@@ -55,6 +55,104 @@ interface WorktreeInfo {
   source: 'conductor' | 'other';
 }
 
+function EditorPane({
+  pane,
+  paneKey,
+  showClose,
+  focusedPane,
+  splitActive,
+  onFocus,
+  onClose,
+  onSplitActivate,
+}: {
+  pane: PaneState;
+  paneKey: 'left' | 'right';
+  showClose: boolean;
+  focusedPane: 'left' | 'right';
+  splitActive: boolean;
+  onFocus: (pane: 'left' | 'right') => void;
+  onClose: (pane: 'left' | 'right') => void;
+  onSplitActivate: () => void;
+}) {
+  if (!pane.file) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+        {paneKey === 'right' ? (
+          <span>Right-click a file to open here</span>
+        ) : (
+          <span>Select a file to start editing</span>
+        )}
+      </div>
+    );
+  }
+
+  const scopeColor = pane.file.scope === 'global' ? 'text-blue-500' : 'text-green-500';
+
+  return (
+    <div
+      className={`flex-1 flex flex-col min-w-0 ${
+        focusedPane === paneKey ? 'ring-1 ring-primary/30' : ''
+      }`}
+      onClick={() => onFocus(paneKey)}
+    >
+      {/* Pane header */}
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-secondary/50 border-b border-border">
+        <FileText size={13} className={scopeColor} />
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            fetch('/api/open', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ path: pane.file!.path }),
+            });
+          }}
+          className="text-[12px] font-medium truncate flex-1 text-left hover:underline flex items-center gap-1 group"
+          title={`Open in Finder: ${pane.file.path}`}
+        >
+          <span className="truncate">{pane.file.relativePath}</span>
+          <ExternalLink size={11} className="flex-shrink-0 opacity-0 group-hover:opacity-60 transition-opacity" />
+        </button>
+        {!splitActive && paneKey === 'left' && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSplitActivate();
+            }}
+            className="text-[10px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded border border-border hover:bg-accent transition-colors"
+            title="Open split view"
+          >
+            Split
+          </button>
+        )}
+        {showClose && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose(paneKey);
+            }}
+            className="text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-accent transition-colors"
+            title="Close pane"
+          >
+            <X size={13} />
+          </button>
+        )}
+      </div>
+      {/* Editor */}
+      <div className="flex-1 overflow-hidden">
+        <MarkdownEditor
+          key={pane.file.path}
+          filePath={pane.file.path}
+          initialContent={pane.content}
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function MarkdownsTab({ markdownFiles, extraMdDirs, onAddMdDir, onRemoveMdDir, openFilePath, onOpenFileHandled }: MarkdownsTabProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -294,95 +392,10 @@ export default function MarkdownsTab({ markdownFiles, extraMdDirs, onAddMdDir, o
     );
   }
 
-  function EditorPane({
-    pane,
-    paneKey,
-    showClose,
-  }: {
-    pane: PaneState;
-    paneKey: 'left' | 'right';
-    showClose: boolean;
-  }) {
-    if (!pane.file) {
-      return (
-        <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-          {paneKey === 'right' ? (
-            <span>Right-click a file to open here</span>
-          ) : (
-            <span>Select a file to start editing</span>
-          )}
-        </div>
-      );
-    }
-
-    const scopeColor = pane.file.scope === 'global' ? 'text-blue-500' : 'text-green-500';
-
-    return (
-      <div
-        className={`flex-1 flex flex-col min-w-0 ${
-          focusedPane === paneKey ? 'ring-1 ring-primary/30' : ''
-        }`}
-        onClick={() => setFocusedPane(paneKey)}
-      >
-        {/* Pane header */}
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-secondary/50 border-b border-border">
-          <FileText size={13} className={scopeColor} />
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              // Reveal file in Finder
-              fetch('/api/open', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ path: pane.file!.path }),
-              });
-            }}
-            className="text-[12px] font-medium truncate flex-1 text-left hover:underline flex items-center gap-1 group"
-            title={`Open in Finder: ${pane.file.path}`}
-          >
-            <span className="truncate">{pane.file.relativePath}</span>
-            <ExternalLink size={11} className="flex-shrink-0 opacity-0 group-hover:opacity-60 transition-opacity" />
-          </button>
-          {!splitActive && paneKey === 'left' && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setSplitActive(true);
-                setFocusedPane('right');
-              }}
-              className="text-[10px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded border border-border hover:bg-accent transition-colors"
-              title="Open split view"
-            >
-              Split
-            </button>
-          )}
-          {showClose && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                closePane(paneKey);
-              }}
-              className="text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-accent transition-colors"
-              title="Close pane"
-            >
-              <X size={13} />
-            </button>
-          )}
-        </div>
-        {/* Editor */}
-        <div className="flex-1 overflow-hidden">
-          <MarkdownEditor
-            key={pane.file.path}
-            filePath={pane.file.path}
-            initialContent={pane.content}
-          />
-        </div>
-      </div>
-    );
-  }
+  const handleSplitActivate = useCallback(() => {
+    setSplitActive(true);
+    setFocusedPane('right');
+  }, []);
 
   return (
     <div className="space-y-3">
@@ -546,11 +559,11 @@ export default function MarkdownsTab({ markdownFiles, extraMdDirs, onAddMdDir, o
 
       {/* Editor area */}
       <div className="flex-1 flex min-w-0">
-        <EditorPane pane={leftPane} paneKey="left" showClose={splitActive} />
+        <EditorPane pane={leftPane} paneKey="left" showClose={splitActive} focusedPane={focusedPane} splitActive={splitActive} onFocus={setFocusedPane} onClose={closePane} onSplitActivate={handleSplitActivate} />
         {splitActive && (
           <>
             <div className="w-px bg-border flex-shrink-0" />
-            <EditorPane pane={rightPane} paneKey="right" showClose />
+            <EditorPane pane={rightPane} paneKey="right" showClose focusedPane={focusedPane} splitActive={splitActive} onFocus={setFocusedPane} onClose={closePane} onSplitActivate={handleSplitActivate} />
           </>
         )}
       </div>
