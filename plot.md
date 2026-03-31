@@ -48,14 +48,14 @@ GET /api/projects
   ],
   "conductorProjects": [
     {
-      "name": "puffle-app",
-      "mainRepo": "/Users/kush/Documents/puffle/puffle-app",
+      "name": "my-project",
+      "mainRepo": "~/projects/my-project",
       "worktrees": [
-        { "name": "biarritz-v2", "path": "/Users/kush/conductor/workspaces/puffle-app/biarritz-v2" }
+        { "name": "feature-v1", "path": "~/conductor/workspaces/my-project/feature-v1" }
       ]
     }
   ],
-  "conductorDir": "/Users/kush/conductor"
+  "conductorDir": "~/conductor"
 }
 ```
 
@@ -150,7 +150,7 @@ bun run scan /path -s mcpServers
   "name": "nia",
   "scope": "global",
   "source": "Client State",
-  "sourcePath": "/Users/kush/.claude.json",
+  "sourcePath": "~/.claude.json",
   "type": "stdio",
   "url": null,
   "config": { "command": "...", "args": [...], "env": {...} }
@@ -206,7 +206,7 @@ bun run scan /path -s plugins
   "scope": "global",
   "source": "Plugins",
   "version": "1.2.0",
-  "installPath": "/Users/kush/.claude/plugins/superpowers/...",
+  "installPath": "~/.claude/plugins/superpowers/...",
   "marketplace": "claude-plugin-registry",
   "skills": ["write-plan", "test-driven-development", ...],
   "hooks": ["PreToolUse", ...],
@@ -248,7 +248,7 @@ bun run scan /path -s skills
   "scope": "global",
   "source": "superpowers",
   "description": "Use when implementing any feature or bugfix...",
-  "filePath": "/Users/kush/.claude/plugins/.../skills/test-driven-development/SKILL.md",
+  "filePath": "~/.claude/plugins/.../skills/test-driven-development/SKILL.md",
   "size": 4523,
   "lines": 120,
   "tokens": 1131
@@ -284,7 +284,7 @@ bun run scan /path -s hooks
   "name": "PreToolUse",
   "scope": "global",
   "source": "superpowers",
-  "sourcePath": "/Users/kush/.claude/plugins/.../hooks/pre-tool-use.mjs",
+  "sourcePath": "~/.claude/plugins/.../hooks/pre-tool-use.mjs",
   "type": "command",
   "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use.mjs\"",
   "event": "PreToolUse",
@@ -313,7 +313,7 @@ bun run scan /path -s commands
   "scope": "global",
   "source": "Global Commands",
   "description": "Create a git commit with a good message",
-  "filePath": "/Users/kush/.claude/commands/commit.md"
+  "filePath": "~/.claude/commands/commit.md"
 }
 ```
 

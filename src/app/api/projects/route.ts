@@ -49,8 +49,8 @@ async function resolveMainRepo(worktreePath: string): Promise<string | null> {
       const content = (await fs.readFile(gitPath, 'utf-8')).trim();
       const match = content.match(/^gitdir:\s*(.+)$/);
       if (match) {
-        // e.g. /Users/kush/Documents/puffle/puffle-app/.git/worktrees/biarritz-v2
-        // We want: /Users/kush/Documents/puffle/puffle-app
+        // e.g. ~/projects/my-project/.git/worktrees/feature-v1
+        // We want: ~/projects/my-project
         const gitdir = match[1];
         const worktreesIdx = gitdir.indexOf('/.git/worktrees/');
         if (worktreesIdx !== -1) {

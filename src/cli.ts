@@ -1,9 +1,9 @@
-#!/usr/bin/env npx tsx
+#!/usr/bin/env node
 /**
  * CLI for Claude Context Visualizer
  *
  * Usage:
- *   npx tsx src/cli.ts [project-path] [options]
+ *   ccv scan [project-path] [options]
  *
  * Options:
  *   --project, -p <path>       Project path to scan (or pass as first positional arg)
@@ -19,15 +19,15 @@
  *   --help, -h                 Show this help
  *
  * Examples:
- *   npx tsx src/cli.ts                              # Scan global context only
- *   npx tsx src/cli.ts /path/to/project             # Scan project + global
- *   npx tsx src/cli.ts -p /path -s skills           # Just list skills
- *   npx tsx src/cli.ts -p /path -s markdowns        # All discovered .md files
- *   npx tsx src/cli.ts --list-projects              # Known projects from ~/.claude.json
- *   npx tsx src/cli.ts --conductor-projects         # Conductor repos + worktrees
- *   npx tsx src/cli.ts --read-file /path/to/file    # Read a file
- *   npx tsx src/cli.ts --introspect --all           # Introspect all MCP servers
- *   npx tsx src/cli.ts -p /path -s summary          # Quick summary counts
+ *   ccv scan                                        # Scan global context only
+ *   ccv scan /path/to/project                       # Scan project + global
+ *   ccv scan -p /path -s skills                     # Just list skills
+ *   ccv scan -p /path -s markdowns                  # All discovered .md files
+ *   ccv scan --list-projects                        # Known projects from ~/.claude.json
+ *   ccv scan --conductor-projects                   # Conductor repos + worktrees
+ *   ccv scan --read-file /path/to/file              # Read a file
+ *   ccv scan --introspect --all                     # Introspect all MCP servers
+ *   ccv scan -p /path -s summary                    # Quick summary counts
  */
 
 import { scanContext } from './lib/scanner';

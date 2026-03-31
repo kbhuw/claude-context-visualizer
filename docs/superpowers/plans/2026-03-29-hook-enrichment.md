@@ -86,7 +86,7 @@ export async function mergeEnrichments(incoming: EnrichmentMap): Promise<Enrichm
 
 - [ ] **Step 2: Verify it compiles**
 
-Run: `cd /Users/kushbhuwalka/conductor/workspaces/claude-context-visualizer/houston-v2 && npx tsc --noEmit src/lib/enrichment.ts 2>&1 | head -20`
+Run: `cd <project-path> && npx tsc --noEmit src/lib/enrichment.ts 2>&1 | head -20`
 
 Expected: No errors (or only errors about missing module resolution that bun handles).
 
@@ -130,7 +130,7 @@ export interface Hook {
 
 - [ ] **Step 2: Verify it compiles**
 
-Run: `cd /Users/kushbhuwalka/conductor/workspaces/claude-context-visualizer/houston-v2 && bunx tsc --noEmit 2>&1 | head -20`
+Run: `cd <project-path> && bunx tsc --noEmit 2>&1 | head -20`
 
 Expected: No type errors.
 
@@ -181,13 +181,13 @@ In `scanContext()`, after the final `allHooks` array is assembled (after the ses
 
 - [ ] **Step 3: Verify it compiles**
 
-Run: `cd /Users/kushbhuwalka/conductor/workspaces/claude-context-visualizer/houston-v2 && bunx tsc --noEmit 2>&1 | head -20`
+Run: `cd <project-path> && bunx tsc --noEmit 2>&1 | head -20`
 
 Expected: No type errors.
 
 - [ ] **Step 4: Test manually — scan with no enrichments file**
 
-Run: `cd /Users/kushbhuwalka/conductor/workspaces/claude-context-visualizer/houston-v2 && bun run scan -s hooks --pretty 2>&1 | head -30`
+Run: `cd <project-path> && bun run scan -s hooks --pretty 2>&1 | head -30`
 
 Expected: Hooks output as before, no enrichment fields present.
 
@@ -270,7 +270,7 @@ Add a new handler block in the main dispatch section of `cli.ts` (before the def
 
 - [ ] **Step 3: Test the dump-hooks flag**
 
-Run: `cd /Users/kushbhuwalka/conductor/workspaces/claude-context-visualizer/houston-v2 && bun run scan --dump-hooks -p . 2>&1 | head -40`
+Run: `cd <project-path> && bun run scan --dump-hooks -p . 2>&1 | head -40`
 
 Expected: JSON array with hook objects, each having `key`, `event`, `matcher`, `command`, `scope`, `source`, `sourcePath`, `sourceCode` fields.
 
@@ -345,7 +345,7 @@ Add before the dump-hooks handler:
 
 Run:
 ```bash
-cd /Users/kushbhuwalka/conductor/workspaces/claude-context-visualizer/houston-v2
+cd <project-path>
 echo '{"test123": {"description": "test hook", "riskLevel": "low", "contextImpact": "none", "scope": "global", "origin": "user", "event": "SessionStart", "matcher": "", "command": "echo test", "tags": ["test"], "enrichedAt": "2026-03-29T00:00:00Z"}}' | bun run scan --write-enrichments
 ```
 
@@ -485,7 +485,7 @@ Add before the hook groups in the return statement (before `{renderGroup(globalH
 
 - [ ] **Step 3: Verify it compiles**
 
-Run: `cd /Users/kushbhuwalka/conductor/workspaces/claude-context-visualizer/houston-v2 && bunx tsc --noEmit 2>&1 | head -20`
+Run: `cd <project-path> && bunx tsc --noEmit 2>&1 | head -20`
 
 Expected: No type errors.
 
@@ -576,13 +576,13 @@ This goes inside the existing `{isHook && (...)}` block, right before the closin
 
 - [ ] **Step 2: Verify it compiles**
 
-Run: `cd /Users/kushbhuwalka/conductor/workspaces/claude-context-visualizer/houston-v2 && bunx tsc --noEmit 2>&1 | head -20`
+Run: `cd <project-path> && bunx tsc --noEmit 2>&1 | head -20`
 
 Expected: No type errors.
 
 - [ ] **Step 3: Visual test — start dev server and check**
 
-Run: `cd /Users/kushbhuwalka/conductor/workspaces/claude-context-visualizer/houston-v2 && bun run dev`
+Run: `cd <project-path> && bun run dev`
 
 Open http://localhost:3000, navigate to Hooks tab:
 - Verify hooks display as before (no enrichment data yet)
@@ -603,7 +603,7 @@ git commit -m "feat: show hook enrichment details in DetailPanel"
 - [ ] **Step 1: Run the full pipeline manually**
 
 ```bash
-cd /Users/kushbhuwalka/conductor/workspaces/claude-context-visualizer/houston-v2
+cd <project-path>
 
 # Dump hooks
 bun run scan --dump-hooks -p . > /tmp/hooks-dump.json
