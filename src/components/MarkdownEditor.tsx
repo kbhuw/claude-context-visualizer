@@ -27,7 +27,114 @@ import {
   Undo,
   Redo,
   Save,
+  FileInput,
+  ListTree,
 } from 'lucide-react';
+import { Plugin, PluginKey } from '@tiptap/pm/state';
+import type { Editor } from '@tiptap/react';
+import FileBrowserModal from './FileBrowserModal';
+
+interface HeadingItem {
+  level: number;
+  text: string;
+  pos: number;
+}
+
+function getHeadings(editor: Editor): HeadingItem[] {
+  const headings: HeadingItem[] = [];
+  editor.state.doc.descendants((node, pos) => {
+    if (node.type.name === 'heading') {
+      headings.push({
+        level: node.attrs.level as number,
+        text: node.textContent,
+        pos,
+      });
+    }
+  });
+  return headings;
+}
+
+function HeadingIndex({ editor, onClose }: { editor: Editor; onClose: () => void }) {
+  const headings = getHeadings(editor);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [onClose]);
+
+  if (headings.length === 0) {
+    return (
+      <div
+        ref={dropdownRef}
+        className="absolute right-12 top-full mt-1 z-50 w-56 bg-popover border border-border rounded-lg shadow-lg py-2 px-3"
+      >
+        <p className="text-xs text-muted-foreground">No headings found</p>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={dropdownRef}
+      className="absolute right-12 top-full mt-1 z-50 w-64 max-h-72 overflow-y-auto bg-popover border border-border rounded-lg shadow-lg py-1"
+    >
+      <div className="px-3 py-1.5 text-[10px] font-semibold text-primary uppercase tracking-wider">
+        Outline
+      </div>
+      {headings.map((h, i) => (
+        <button
+          key={i}
+          type="button"
+          className="w-full text-left px-3 py-1 hover:bg-accent transition-colors text-sm truncate cursor-pointer"
+          style={{ paddingLeft: `${(h.level - 1) * 12 + 12}px` }}
+          onClick={() => {
+            // Scroll the heading into view
+            const resolvedPos = editor.state.doc.resolve(h.pos);
+            const dom = editor.view.nodeDOM(resolvedPos.before(resolvedPos.depth + 1));
+            if (dom && dom instanceof HTMLElement) {
+              dom.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } else {
+              // Fallback: set cursor to heading position
+              editor.chain().focus().setTextSelection(h.pos + 1).run();
+              const { node } = editor.view.domAtPos(h.pos + 1);
+              if (node instanceof HTMLElement) {
+                node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              } else if (node.parentElement) {
+                node.parentElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }
+            }
+            onClose();
+          }}
+        >
+          <span
+            className={
+              h.level === 1
+                ? 'font-semibold text-foreground'
+                : h.level === 2
+                  ? 'text-muted-foreground'
+                  : 'text-muted-foreground/70 text-xs'
+            }
+          >
+            {h.text}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 interface MarkdownEditorProps {
   filePath: string;
@@ -75,6 +182,8 @@ export default function MarkdownEditor({
   onSaveStatusChange,
 }: MarkdownEditorProps) {
   const [saveStatus, setSaveStatus] = useState<'saved' | 'unsaved' | 'saving'>('saved');
+  const [fileBrowserOpen, setFileBrowserOpen] = useState(false);
+  const [indexOpen, setIndexOpen] = useState(false);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const contentRef = useRef(initialContent);
 
@@ -148,6 +257,41 @@ export default function MarkdownEditor({
       setSaveStatus('saved');
     }
   }, [initialContent, editor]);
+
+  const insertInclude = useCallback((selectedPath: string) => {
+    if (!editor) return;
+    const directive = `@${selectedPath}`;
+    editor.chain().focus().insertContent(`\n${directive}\n`).run();
+  }, [editor]);
+
+  // @ key trigger: open file browser when @ is typed at start of a line
+  useEffect(() => {
+    if (!editor) return;
+
+    const pluginKey = new PluginKey('at-include-trigger');
+    const plugin = new Plugin({
+      key: pluginKey,
+      props: {
+        handleKeyDown(_view, event) {
+          if (event.key === '@') {
+            const { $from } = editor.state.selection;
+            const textBefore = $from.parent.textContent.slice(0, $from.parentOffset);
+            if (textBefore.trim() === '') {
+              event.preventDefault();
+              setFileBrowserOpen(true);
+              return true;
+            }
+          }
+          return false;
+        },
+      },
+    });
+
+    editor.registerPlugin(plugin);
+    return () => {
+      editor.unregisterPlugin(pluginKey);
+    };
+  }, [editor]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -286,6 +430,12 @@ export default function MarkdownEditor({
         >
           <LinkIcon size={iconSize} />
         </ToolbarButton>
+        <ToolbarButton
+          onClick={() => setFileBrowserOpen(true)}
+          title="Include file (@)"
+        >
+          <FileInput size={iconSize} />
+        </ToolbarButton>
 
         <ToolbarDivider />
 
@@ -304,8 +454,18 @@ export default function MarkdownEditor({
           <Redo size={iconSize} />
         </ToolbarButton>
 
-        {/* Save button & status */}
-        <div className="ml-auto flex items-center gap-1.5 text-[11px] pr-1">
+        {/* Index & Save */}
+        <div className="ml-auto flex items-center gap-1.5 text-[11px] pr-1 relative">
+          <ToolbarButton
+            onClick={() => setIndexOpen(!indexOpen)}
+            active={indexOpen}
+            title="Document Outline"
+          >
+            <ListTree size={iconSize} />
+          </ToolbarButton>
+          {indexOpen && editor && (
+            <HeadingIndex editor={editor} onClose={() => setIndexOpen(false)} />
+          )}
           <ToolbarButton
             onClick={() => {
               if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -341,6 +501,12 @@ export default function MarkdownEditor({
       <div className="flex-1 overflow-auto">
         <EditorContent editor={editor} className="h-full" />
       </div>
+
+      <FileBrowserModal
+        open={fileBrowserOpen}
+        onClose={() => setFileBrowserOpen(false)}
+        onSelect={insertInclude}
+      />
     </div>
   );
 }
